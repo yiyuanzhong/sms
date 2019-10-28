@@ -542,21 +542,25 @@ UserDataHeader::getConcatenatedShortMessages() const
     return nullptr;
 }
 
-PDU::PDU(const std::string &pdu, bool sending, bool has_smsc) : _type(Type::Invalid)
+PDU::PDU(const std::string &pdu, bool sending, bool has_smsc)
 {
     try {
         Decode(pdu, sending, has_smsc);
+        _result = Result::OK;
+
     } catch (const Exception &e) {
         std::ostringstream s;
+        _result = e.result();
         switch (e.result()) {
         case Result::OK:
-            s << "Internal error: ";
+            s << "internal error: ";
+            _result = Result::Failed;
             break;
         case Result::Failed:
-            s << "Internal error: ";
+            s << "invalid PDU: ";
             break;
         case Result::NotImplemented:
-            s << "Internal error: ";
+            s << "unsupported PDU: ";
             break;
         }
 
@@ -565,15 +569,10 @@ PDU::PDU(const std::string &pdu, bool sending, bool has_smsc) : _type(Type::Inva
     }
 }
 
-void PDU::Decode(const std::string &pdu, bool sending, bool has_smsc)
+void PDU::Decode(const std::string &hex, bool sending, bool has_smsc)
 {
-    std::string unhex;
-    if (flinter::DecodeHex(pdu, &unhex)) {
-        throw Exception(Result::Failed, "bad hexdump");
-    }
-
-    auto s = reinterpret_cast<const unsigned char *>(unhex.data());
-    auto max = unhex.length();
+    auto s = reinterpret_cast<const unsigned char *>(hex.data());
+    auto max = hex.length();
 
     if (has_smsc) {
         size_t ret;

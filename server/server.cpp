@@ -15,6 +15,7 @@
 
 #include "sms/server/configure.h"
 #include "sms/server/database.h"
+#include "sms/server/pdu.h"
 #include "sms/server/smtp.h"
 
 class Server : public flinter::CGI {
@@ -29,13 +30,33 @@ protected:
     static std::string FormatDateTime(int64_t t);
     static std::string FormatDuration(int64_t t);
 
-    bool ProcessCall(const flinter::Tree &t, std::ostringstream &m);
-    bool ProcessPdu(const flinter::Tree &t, std::ostringstream &m);
-    bool ProcessSms(const flinter::Tree &t, std::ostringstream &m);
+    bool ProcessPdu(
+            const flinter::Tree &tree,
+            std::ostringstream &m,
+            bool has_smsc);
+
+    bool ProcessCall(
+            const flinter::Tree &t,
+            std::ostringstream &m);
+
+    bool ProcessSms(
+            const flinter::Tree &t,
+            std::ostringstream &m);
 
     int FindDevice(const std::string &token,
             std::string *receiver,
-            std::string *to) const;
+            std::string *to,
+            bool *has_smsc) const;
+
+    static void Print(
+            int64_t timestamp,
+            const pdu::Submit *pdu,
+            std::ostringstream &m);
+
+    static void Print(
+            int64_t timestamp,
+            const pdu::Deliver *pdu,
+            std::ostringstream &m);
 
 private:
     int _device;
@@ -111,7 +132,8 @@ Server::~Server()
 int Server::FindDevice(
         const std::string &token,
         std::string *receiver,
-        std::string *to) const
+        std::string *to,
+        bool *has_smsc) const
 {
     const flinter::Tree &c = (*g_configure)["device"];
     for (flinter::Tree::const_iterator p = c.begin(); p != c.end(); ++p) {
@@ -119,6 +141,7 @@ int Server::FindDevice(
         if (i["token"].compare(token) == 0) {
             *receiver = i["receiver"];
             *to = i["to"];
+            *has_smsc = !i.Has("has_smsc") || !!i["has_smsc"].as<int>();
             return flinter::convert<int>(i.key());
         }
     }
@@ -138,8 +161,9 @@ void Server::Run()
     const std::string &token = r["token"];
     std::string receiver;
     std::string to;
+    bool has_smsc;
 
-    _device = FindDevice(token, &receiver, &to);
+    _device = FindDevice(token, &receiver, &to, &has_smsc);
     if (_device < 0) {
         throw flinter::HttpException(403);
     }
@@ -170,8 +194,8 @@ void Server::Run()
     }
 
     const flinter::Tree &pdu = r["pdu"];
-    for (flinter::Tree::const_iterator p = pdu.begin(); p != pdu.end(); ++p) {
-        if (!ProcessPdu(*p, m)) {
+    if (pdu.children_size()) {
+        if (!ProcessPdu(pdu, m, has_smsc)) {
             throw flinter::HttpException(400);
         }
 
@@ -275,7 +299,7 @@ bool Server::ProcessSms(const flinter::Tree &t, std::ostringstream &m)
     }
 
     m << "<tr>\n"
-      << "<td>" << FormatDate(received) << "</td>\n"
+      << "<td>" << FormatDate(sent) << "</td>\n"
       << "<td>" << FormatTime(sent) << "</td>\n"
       << "<td>" << FormatTime(received) << "</td>\n"
       << "<td>" << flinter::EscapeHtml(peer) << "</td>\n"
@@ -287,34 +311,120 @@ bool Server::ProcessSms(const flinter::Tree &t, std::ostringstream &m)
             _device, type, sent, received, peer, subject, body);
 }
 
-bool Server::ProcessPdu(const flinter::Tree &t, std::ostringstream &m)
+bool Server::ProcessPdu(
+        const flinter::Tree &tree,
+        std::ostringstream &m,
+        bool has_smsc)
 {
-    bool v;
+    std::list<std::pair<int64_t, pdu::PDU>> pdus;
+    for (flinter::Tree::const_iterator p = tree.begin(); p != tree.end(); ++p) {
+        bool v;
+        const flinter::Tree &t = *p;
+        const int64_t timestamp = flinter::convert<int64_t>(t["timestamp"], 0, &v);
+        if (!v) {
+            return false;
+        }
 
-    (void)m;
+        const std::string &type = t["type"];
+        if (type.empty()) {
+            return false;
+        }
 
-    const int64_t timestamp = flinter::convert<int64_t>(t["timestamp"], 0, &v);
-    if (!v) {
-        return false;
+        bool sending;
+        if (type == "Incoming") {
+            sending = false;
+        } else if (type == "Outgoing") {
+            sending = true;
+        } else {
+            return false;
+        }
+
+        const std::string &pdu = t["pdu"];
+        if (pdu.empty()) {
+            return false;
+        }
+
+        std::string hex;
+        if (flinter::DecodeHex(pdu, &hex)) {
+            return false;
+        }
+
+        if (!_db->InsertPDU(_device, timestamp, _uploaded, type, hex)) {
+            return false;
+        }
+
+        pdu::PDU s(hex, sending, has_smsc);
+        switch (s.result()) {
+        case pdu::Result::Failed:
+            return false;
+
+        case pdu::Result::OK:
+            pdus.push_back(std::make_pair(timestamp, s));
+            break;
+
+        case pdu::Result::NotImplemented:
+            m << "<tr>\n"
+              << "<td>" << FormatDate(timestamp) << "</td>\n"
+              << "<td>" << FormatTime(timestamp) << "</td>\n"
+              << "<td>" << flinter::EscapeHtml(type) << "</td>\n"
+              << "<td>" << flinter::EscapeHtml("<unsupported>") << "</td>\n"
+              << "</tr>\n";
+            break;
+        }
     }
 
-    const std::string &type = t["type"];
-    if (type.empty()) {
-        return false;
+    for (std::list<std::pair<int64_t, pdu::PDU>>::const_iterator
+         p = pdus.begin(); p != pdus.end(); ++p) {
+
+        switch (p->second.type()) {
+        case pdu::Type::Deliver:
+            Print(p->first, p->second.deliver().get(), m);
+            break;
+
+        case pdu::Type::Submit:
+            Print(p->first, p->second.submit().get(), m);
+            break;
+        }
     }
 
-    const std::string &pdu = t["pdu"];
-    if (pdu.empty()) {
-        return false;
-    }
+    return true;
+}
 
-    std::string hex;
-    if (flinter::DecodeHex(pdu, &hex)) {
-        return false;
-    }
+void Server::Print(
+        int64_t timestamp,
+        const pdu::Deliver *pdu,
+        std::ostringstream &m)
+{
+    const int64_t ts = static_cast<int64_t>(
+            pdu->TPServiceCentreTimeStamp) * 1000000000;
 
-    return _db->InsertPDU(
-            _device, timestamp, _uploaded, type, hex);
+    m << "<tr>\n"
+      << "<td>" << FormatDate(ts) << "</td>\n"
+      << "<td>" << FormatTime(ts) << "</td>\n"
+      << "<td>" << FormatTime(timestamp) << "</td>\n"
+      << "<td>" << flinter::EscapeHtml(pdu->TPOriginatingAddress) << "</td>\n"
+      << "</tr>\n"
+      << "<tr><th colspan=\"4\">"
+      << flinter::EscapeHtml(pdu->TPUserData)
+      << "</th>\n"
+      << "</tr>\n";
+}
+
+void Server::Print(
+        int64_t timestamp,
+        const pdu::Submit *pdu,
+        std::ostringstream &m)
+{
+    m << "<tr>\n"
+      << "<td>" << FormatDate(timestamp) << "</td>\n"
+      << "<td>" << FormatTime(timestamp) << "</td>\n"
+      << "<td>" << flinter::EscapeHtml("Outgoing") << "</td>\n"
+      << "<td>" << flinter::EscapeHtml(pdu->TPDestinationAddress) << "</td>\n"
+      << "</tr>\n"
+      << "<tr><th colspan=\"4\">"
+      << flinter::EscapeHtml(pdu->TPUserData)
+      << "</th>\n"
+      << "</tr>\n";
 }
 
 CGI_DISPATCH(Server, "/");

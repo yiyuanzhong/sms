@@ -16,6 +16,11 @@ enum class Result {
     NotImplemented = 2,
 }; // enum class Result
 
+enum class Type {
+    Submit,
+    Deliver,
+}; // enum class Type
+
 class ConcatenatedShortMessages {
 public:
     uint16_t ReferenceNumber;
@@ -74,18 +79,7 @@ public:
 
 class PDU {
 public:
-    enum class Type {
-        Invalid,
-        Submit,
-        Deliver,
-    }; // enum class Type
-
-    PDU(const std::string &pdu, bool sending, bool has_smsc);
-
-    operator bool() const
-    {
-        return _type != Type::Invalid;
-    }
+    PDU(const std::string &hex, bool sending, bool has_smsc);
 
     const std::string &why() const
     {
@@ -95,6 +89,11 @@ public:
     Type type() const
     {
         return _type;
+    }
+
+    Result result() const
+    {
+        return _result;
     }
 
     const std::string &smsc() const
@@ -117,6 +116,7 @@ protected:
 
 private:
     Type _type;
+    Result _result;
     std::string _why;
     std::string _smsc;
     std::shared_ptr<Submit> _submit;
