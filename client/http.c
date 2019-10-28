@@ -71,15 +71,13 @@ struct http *http_open(
         return NULL;
     }
 
-    if (curl_easy_setopt(h->curl, CURLOPT_CONNECTTIMEOUT, 5L    ) ||
+    if (curl_easy_setopt(h->curl, CURLOPT_CONNECTTIMEOUT, 15L   ) ||
         curl_easy_setopt(h->curl, CURLOPT_TIMEOUT,        15L   ) ||
         curl_easy_setopt(h->curl, CURLOPT_URL,            url   ) ||
         curl_easy_setopt(h->curl, CURLOPT_WRITEFUNCTION,  writer) ||
         curl_easy_setopt(h->curl, CURLOPT_WRITEDATA,      h     ) ||
         curl_easy_setopt(h->curl, CURLOPT_SSL_VERIFYHOST, 0L    ) ||
         curl_easy_setopt(h->curl, CURLOPT_SSL_VERIFYPEER, 0L    ) ||
-        curl_easy_setopt(h->curl, CURLOPT_FOLLOWLOCATION, 1L    ) ||
-        curl_easy_setopt(h->curl, CURLOPT_MAXREDIRS,      5L    ) ||
         curl_easy_setopt(h->curl, CURLOPT_POST,           1L    ) ){
 
         http_close(h);

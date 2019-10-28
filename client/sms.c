@@ -169,7 +169,7 @@ static void sms_break_lines(
 
 #ifndef NDEBUG
     for (size_t i = 0; i < *cline; ++i) {
-        LOG("[%lu:%lu:%lu]: [%s]",
+        LOGD("[%lu:%lu:%lu]: [%s]",
                i, lines[i].from, lines[i].to, lines[i].ptr);
     }
 #endif
@@ -221,7 +221,7 @@ static void sms_break_sections(
 #ifndef NDEBUG
     for (size_t i = 0; i < *csection; ++i) {
         psection = sections + i;
-        LOG("Section: %lu - %lu: %s",
+        LOGD("Section: %lu - %lu: %s",
                psection->from->id,
                (psection->to - 1)->id,
                psection->name);
