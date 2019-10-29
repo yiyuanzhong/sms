@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -106,7 +107,7 @@ static int decode_numeric(const unsigned char *s, size_t size, char *output, siz
 
 static int decode_alphanumeric(const unsigned char *s, size_t length, char *output, size_t outlen)
 {
-    unsigned long long n;
+    uint64_t n;
     size_t max;
     size_t i;
     size_t j;
@@ -118,7 +119,7 @@ static int decode_alphanumeric(const unsigned char *s, size_t length, char *outp
     max = length * 7 / 8 + !!(length * 7 % 8);
     for (i = 0, j = 0, n = 0; i < max; ++i) {
         n >>= 8;
-        n |= (unsigned long long)s[i] << 48;
+        n |= (uint64_t)s[i] << 48;
         if (i % 7 == 6) {
             output[j++] = (char)(n & 0x7F); n >>= 7;
             output[j++] = (char)(n & 0x7F); n >>= 7;
@@ -433,7 +434,7 @@ static int decode_user_data(
     switch ((TPDataCodingScheme & 0x0C) >> 2) {
     case 0: /* alphabet */
         len = (uint32_t)TPUserDataLength * 7 / 8 + !!((uint32_t)TPUserDataLength * 7 % 8);
-        if (len != max) {
+        if (len > max) {
             return -1;
         }
 
@@ -444,6 +445,10 @@ static int decode_user_data(
         *udlen = (uint8_t)TPUserDataLength;
         if (TPUserDataHeaderIndicator) {
             TPUserDataHeaderLength = (unsigned int)(*s) + 1;
+            if (TPUserDataHeaderLength > max) {
+                return -1;
+            }
+
             len = TPUserDataHeaderLength * 8 / 7 + !!(TPUserDataHeaderLength * 8 % 7);
             if (udhmax < len) {
                 return -1;
@@ -458,12 +463,16 @@ static int decode_user_data(
         return 0;
 
     case 1: /* 8 bit */
-        if (TPUserDataLength != max) {
+        if (TPUserDataLength > max) {
             return -1;
         }
 
         if (TPUserDataHeaderIndicator) {
             TPUserDataHeaderLength = (unsigned int)(*s);
+            if (TPUserDataHeaderLength > max) {
+                return -1;
+            }
+
             if (udhmax < TPUserDataHeaderLength) {
                 return -1;
             }
@@ -491,14 +500,14 @@ static int decode_user_data(
         return 0;
 
     case 2: /* UCS-2 */
-        if (TPUserDataLength != max) {
+        if (TPUserDataLength > max) {
             return -1;
         }
 
         TPUserDataHeaderLength = 0;
         if (TPUserDataHeaderIndicator) {
             TPUserDataHeaderLength = (unsigned int)(*s) + 1;
-            if (TPUserDataHeaderLength >= TPUserDataLength) {
+            if (TPUserDataHeaderLength >= max) {
                 return -1;
             }
 
