@@ -48,6 +48,8 @@ protected:
             std::string *to,
             bool *has_smsc) const;
 
+    static int GetReferenceNumber(const pdu::PDU &pdu);
+
     static void Print(
             int64_t timestamp,
             const pdu::Submit *pdu,
@@ -376,6 +378,20 @@ bool Server::ProcessPdu(
         }
     }
 
+    pdus.sort([] (const std::pair<int64_t, pdu::PDU> &a,
+                  const std::pair<int64_t, pdu::PDU> &b) -> bool {
+
+        auto at = a.second.type();
+        auto bt = b.second.type();
+        if (at != bt) {
+            return at < bt;
+        }
+
+        int ar = GetReferenceNumber(a.second);
+        int br = GetReferenceNumber(b.second);
+        return ar < br || (ar == br && a.first < b.first);
+    });
+
     for (std::list<std::pair<int64_t, pdu::PDU>>::const_iterator
          p = pdus.begin(); p != pdus.end(); ++p) {
 
@@ -391,6 +407,23 @@ bool Server::ProcessPdu(
     }
 
     return true;
+}
+
+int Server::GetReferenceNumber(const pdu::PDU &pdu)
+{
+    if (pdu.type() == pdu::Type::Deliver) {
+        auto p = pdu.deliver();
+        auto c = p->TPUserDataHeader.GetConcatenatedShortMessages();
+        return c ? static_cast<int>(c->ReferenceNumber) : -1;
+
+    } else if (pdu.type() == pdu::Type::Submit) {
+        auto p = pdu.submit();
+        auto c = p->TPUserDataHeader.GetConcatenatedShortMessages();
+        return c ? static_cast<int>(c->ReferenceNumber) : -1;
+
+    } else {
+        return -1;
+    }
 }
 
 void Server::Print(

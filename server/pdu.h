@@ -33,7 +33,7 @@ public:
     void Decode(const void *buffer, size_t udhlen);
 
     std::shared_ptr<const ConcatenatedShortMessages>
-    getConcatenatedShortMessages() const;
+    GetConcatenatedShortMessages() const;
 
 private:
     std::multimap<uint8_t, std::string> _m;

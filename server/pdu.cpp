@@ -515,7 +515,7 @@ void UserDataHeader::Decode(const void *buffer, size_t udhlen)
 }
 
 std::shared_ptr<const ConcatenatedShortMessages>
-UserDataHeader::getConcatenatedShortMessages() const
+UserDataHeader::GetConcatenatedShortMessages() const
 {
     auto p8 = _m.find(0);
     if (p8 != _m.end()) {
