@@ -272,10 +272,7 @@ bool Server::ProcessSms(const flinter::Tree &t, std::ostringstream &m)
 {
     bool v;
 
-    const std::string &type = t["type"];
-    if (type.empty()) {
-        return false;
-    }
+    const std::string &type = "Incoming";
 
     const int64_t sent = flinter::convert<int64_t>(t["sent"], 0, &v);
     if (!v) {
@@ -287,7 +284,7 @@ bool Server::ProcessSms(const flinter::Tree &t, std::ostringstream &m)
         return false;
     }
 
-    const std::string &peer = t["peer"];
+    const std::string &peer = t["from"];
     if (peer.empty()) {
         return false;
     }
@@ -356,7 +353,13 @@ bool Server::ProcessPdu(
         pdu::PDU s(hex, sending, has_smsc);
         switch (s.result()) {
         case pdu::Result::Failed:
-            return false;
+            m << "<tr>\n"
+              << "<td>" << FormatDate(timestamp) << "</td>\n"
+              << "<td>" << FormatTime(timestamp) << "</td>\n"
+              << "<td>" << flinter::EscapeHtml(type) << "</td>\n"
+              << "<td>" << flinter::EscapeHtml("<error>") << "</td>\n"
+              << "</tr>\n";
+            break;
 
         case pdu::Result::OK:
             pdus.push_back(std::make_pair(timestamp, s));
