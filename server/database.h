@@ -46,6 +46,7 @@ public:
             const std::string &body);
 
 protected:
+    bool Disabled() const;
     bool PrepareCall();
     bool PreparePDU();
     bool PrepareSMS();

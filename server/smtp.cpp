@@ -165,10 +165,6 @@ bool SMTP::Send(
         return false;
     }
 
-    if (!Connect(to)) {
-        return false;
-    }
-
     const flinter::Tree &c = (*g_configure)["smtp"];
     const std::string &from = c["from"];
     const std::string &domain = from.substr(from.find('@') + 1);
@@ -187,14 +183,23 @@ bool SMTP::Send(
 
     const std::string &email = s.str();
 
-    _uploaded = 0;
-    _email = &email;
-    CURLcode ret = curl_easy_perform(_curl);
-    _email = nullptr;
+    if (c["disabled"].as<int>()) {
+        printf("=== SMTP ===\n%s\n=== SMTP ===\n", email.c_str());
 
-    Disconnect();
-    if (ret) {
-        fprintf(stderr, "curl_easy_perform() = %d\n", ret);
+    } else {
+        if (!Connect(to)) {
+            return false;
+        }
+
+        _uploaded = 0;
+        _email = &email;
+        CURLcode ret = curl_easy_perform(_curl);
+        _email = nullptr;
+
+        Disconnect();
+        if (ret) {
+            fprintf(stderr, "curl_easy_perform() = %d\n", ret);
+        }
     }
 
     return true;

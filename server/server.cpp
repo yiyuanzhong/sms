@@ -48,7 +48,8 @@ protected:
             std::string *to,
             bool *has_smsc) const;
 
-    static int GetReferenceNumber(const pdu::PDU &pdu);
+    static std::shared_ptr<const pdu::ConcatenatedShortMessages>
+    GetConcatenatedShortMessages(const pdu::PDU &pdu);
 
     static void Print(
             int64_t timestamp,
@@ -387,9 +388,19 @@ bool Server::ProcessPdu(
             return at < bt;
         }
 
-        int ar = GetReferenceNumber(a.second);
-        int br = GetReferenceNumber(b.second);
-        return ar < br || (ar == br && a.first < b.first);
+        auto ac = GetConcatenatedShortMessages(a.second);
+        auto bc = GetConcatenatedShortMessages(b.second);
+        if (!ac && !bc) {
+            return a.first < b.first;
+        } else if (!ac) {
+            return true;
+        } else if (!bc) {
+            return false;
+        } else if (ac->ReferenceNumber == bc->ReferenceNumber) {
+            return ac->Sequence < bc->Sequence;
+        } else {
+            return ac->ReferenceNumber < bc->ReferenceNumber;
+        }
     });
 
     for (std::list<std::pair<int64_t, pdu::PDU>>::const_iterator
@@ -409,20 +420,18 @@ bool Server::ProcessPdu(
     return true;
 }
 
-int Server::GetReferenceNumber(const pdu::PDU &pdu)
+std::shared_ptr<const pdu::ConcatenatedShortMessages>
+Server::GetConcatenatedShortMessages(const pdu::PDU &pdu)
 {
-    if (pdu.type() == pdu::Type::Deliver) {
-        auto p = pdu.deliver();
-        auto c = p->TPUserDataHeader.GetConcatenatedShortMessages();
-        return c ? static_cast<int>(c->ReferenceNumber) : -1;
+    switch (pdu.type()) {
+    case pdu::Type::Deliver:
+        return pdu.deliver()->TPUserDataHeader.GetConcatenatedShortMessages();
 
-    } else if (pdu.type() == pdu::Type::Submit) {
-        auto p = pdu.submit();
-        auto c = p->TPUserDataHeader.GetConcatenatedShortMessages();
-        return c ? static_cast<int>(c->ReferenceNumber) : -1;
+    case pdu::Type::Submit:
+        return pdu.submit()->TPUserDataHeader.GetConcatenatedShortMessages();
 
-    } else {
-        return -1;
+    default:
+        return nullptr;
     }
 }
 

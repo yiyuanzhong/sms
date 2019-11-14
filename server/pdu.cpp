@@ -531,7 +531,7 @@ UserDataHeader::GetConcatenatedShortMessages() const
     auto p16 = _m.find(8);
     if (p16 != _m.end()) {
         assert(p16->second.length() == 4);
-        auto const p = reinterpret_cast<const uint8_t *>(p8->second.data());
+        auto const p = reinterpret_cast<const uint8_t *>(p16->second.data());
         auto r = std::make_shared<ConcatenatedShortMessages>();
         r->ReferenceNumber = ntohs(*reinterpret_cast<const uint16_t *>(p));
         r->Maximum         = p[2];

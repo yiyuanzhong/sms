@@ -6,6 +6,7 @@
 #include <cppconn/prepared_statement.h>
 
 #include <flinter/types/tree.h>
+#include <flinter/encode.h>
 
 #include "sms/server/configure.h"
 
@@ -89,7 +90,13 @@ bool Database::InsertCall(
         const std::string &type,
         const std::string &raw)
 {
-    if (!Connect() || !PrepareCall()) {
+    if (Disabled()) {
+        printf("=== SQL ===\nCALL %d %ld %ld %s %ld %s %s\n=== SQL ===\n",
+                device, timestamp, uploaded, peer.c_str(), duration,
+                type.c_str(), raw.c_str());
+        return true;
+
+    } else if (!Connect() || !PrepareCall()) {
         return false;
     }
 
@@ -139,7 +146,13 @@ bool Database::InsertPDU(
         const std::string &type,
         const std::string &pdu)
 {
-    if (!Connect() || !PreparePDU()) {
+    if (Disabled()) {
+        printf("=== SQL ===\nPDU %d %ld %ld %s %s\n=== SQL ===\n",
+                device, timestamp, uploaded, type.c_str(),
+                flinter::EncodeHex(pdu).c_str());
+        return true;
+
+    } else if (!Connect() || !PreparePDU()) {
         return false;
     }
 
@@ -189,7 +202,13 @@ bool Database::InsertSMS(
         const std::string &subject,
         const std::string &body)
 {
-    if (!Connect() || !PrepareSMS()) {
+    if (Disabled()) {
+        printf("=== SQL ===\nSMS %d %s %ld %ld %s %s %s\n=== SQL ===\n",
+                device, type.c_str(), sent, received, peer.c_str(),
+                subject.c_str(), body.c_str());
+        return true;
+
+    } else if (!Connect() || !PrepareSMS()) {
         return false;
     }
 
@@ -212,4 +231,10 @@ bool Database::InsertSMS(
         fprintf(stderr, "Database exception: %s\n", e.what());
         return false;
     }
+}
+
+bool Database::Disabled() const
+{
+    const flinter::Tree &c = (*g_configure)["database"];
+    return !!c["disabled"].as<int>();
 }
