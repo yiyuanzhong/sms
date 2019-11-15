@@ -277,12 +277,12 @@ bool Server::ProcessSms(const flinter::Tree &t, std::ostringstream &m)
 
     const std::string &type = "Incoming";
 
-    const int64_t sent = flinter::convert<int64_t>(t["sent"], 0, &v);
+    const int64_t sent = flinter::convert<int64_t>(t["sent"], 0, &v) * 1000000;
     if (!v) {
         return false;
     }
 
-    const int64_t received = flinter::convert<int64_t>(t["received"], 0, &v);
+    const int64_t received = flinter::convert<int64_t>(t["received"], 0, &v) * 1000000;
     if (!v) {
         return false;
     }
