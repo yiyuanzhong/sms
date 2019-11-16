@@ -1,5 +1,6 @@
 #include <stdint.h>
 
+#include <fstream>
 #include <sstream>
 
 #include <flinter/fastcgi/cgi.h>
@@ -36,6 +37,10 @@ protected:
             bool has_smsc);
 
     bool ProcessCall(
+            const flinter::Tree &t,
+            std::ostringstream &m);
+
+    bool ProcessCallOld(
             const flinter::Tree &t,
             std::ostringstream &m);
 
@@ -156,6 +161,10 @@ void Server::Run()
 {
     _uploaded = get_wall_clock_timestamp();
 
+    std::ofstream of("/tmp/upload.txt", std::ios::out);
+    of << request_body();
+    of.close();
+
     flinter::Tree r;
     if (!r.ParseFromJsonString(request_body())) {
         throw flinter::HttpException(400);
@@ -234,9 +243,48 @@ void Server::Run()
     BODY << "{\"ret\":0}";
 }
 
+bool Server::ProcessCallOld(const flinter::Tree &t, std::ostringstream &m)
+{
+    bool v;
+
+    const int64_t timestamp = flinter::convert<int64_t>(t["timestamp"], 0, &v) * 1000000;
+    if (!v) {
+        return false;
+    }
+
+    const int64_t duration = flinter::convert<int64_t>(t["duration"], 0, &v) * 1000000000;
+    if (!v) {
+        return false;
+    }
+
+    const std::string &type = t["type"];
+    if (type.empty()) {
+        return false;
+    }
+
+    const std::string &peer = t["from"];
+    if (peer.empty()) {
+        return false;
+    }
+
+    m << "<tr>\n"
+      << "<td>" << FormatDateTime(timestamp) << "</td>\n"
+      << "<td>" << flinter::EscapeHtml(peer) << "</td>\n"
+      << "<td>" << flinter::EscapeHtml(type) << "</td>\n"
+      << "<td>" << FormatDuration(duration) << "</td>\n"
+      << "</tr>\n";
+
+    return _db->InsertCall(
+            _device, timestamp, _uploaded, peer, duration, type, std::string());
+}
+
 bool Server::ProcessCall(const flinter::Tree &t, std::ostringstream &m)
 {
     bool v;
+
+    if (t.Has("from")) {
+        return ProcessCallOld(t, m);
+    }
 
     const int64_t timestamp = flinter::convert<int64_t>(t["timestamp"], 0, &v);
     if (!v) {
