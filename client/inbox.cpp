@@ -211,7 +211,7 @@ bool Inbox::Send(
 
     auto pc = c->begin();
     for (j = 0; j < sizeof(jc) / sizeof(*jc) && pc != c->end(); ++j, ++pc) {
-        memset(jc + i, 0, sizeof(*jc));
+        memset(jc + j, 0, sizeof(*jc));
         jc[j].ring_start = pc->_ring_start;
         jc[j].call_start = pc->_call_start;
         jc[j].call_end = pc->_call_end;
