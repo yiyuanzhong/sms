@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+HardcodeRunPath = ../lib
 ReleaseAsDebug = 0
 EnableProfiling = 0
-StaticLinkLibraries = 1
+StaticLinkLibraries = 0
 DisableStackProtector = 0
 
 ### MODIFY ANYTHING BELOW THIS LINE THAT IS SUITABLE ###
@@ -27,8 +28,7 @@ SUBDIRS = .
 
 # "d" will be appended for each STATICS, ABC will become -lABC_debug eventually
 STATICS = flinter/output/lib/flinter
-LIBRARIES = fcgi neo_cgi neo_cs neo_utl jsoncpp curl mysqlcppconn-static \
-            cares crypto dl icuuc icudata mysqlclient_r nghttp2 pthread ssl uuid z
+LIBRARIES = neo_cgi neo_cs neo_utl pthread uuid crypto ssl jsoncpp fcgi icuuc curl mysqlcppconn
 PKGCONFIGS =
 
 BINPATH =
