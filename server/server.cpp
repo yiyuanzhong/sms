@@ -1,12 +1,8 @@
 #include <stdint.h>
 
 #include <fstream>
+#include <list>
 #include <sstream>
-
-#include <flinter/fastcgi/cgi.h>
-#include <flinter/fastcgi/common_filters.h>
-#include <flinter/fastcgi/dispatcher.h>
-#include <flinter/fastcgi/http_exception.h>
 
 #include <flinter/types/tree.h>
 
@@ -19,11 +15,10 @@
 #include "sms/server/pdu.h"
 #include "sms/server/smtp.h"
 
-class Server : public flinter::CGI {
+class Server {
 public:
     Server();
-    virtual ~Server();
-    virtual void Run();
+    int Run(const std::string &payload, std::string *response);
 
 protected:
     static std::string FormatTime(int64_t t);
@@ -127,13 +122,6 @@ std::string Server::FormatDateTime(int64_t t)
 
 Server::Server() : _device(-1), _uploaded(-1), _db(new Database)
 {
-    AppendFilter(new flinter::NoCacheFilter);
-    AppendFilter(new flinter::AllowedMethodsFilter("POST"));
-    AppendFilter(new flinter::AllowedContentTypeFilter("application/json"));
-}
-
-Server::~Server()
-{
     // Intended left blank
 }
 
@@ -157,17 +145,17 @@ int Server::FindDevice(
     return -1;
 }
 
-void Server::Run()
+int Server::Run(const std::string &payload, std::string *response)
 {
     _uploaded = get_wall_clock_timestamp();
 
     std::ofstream of("/tmp/upload.txt", std::ios::out);
-    of << request_body();
+    of << payload;
     of.close();
 
     flinter::Tree r;
-    if (!r.ParseFromJsonString(request_body())) {
-        throw flinter::HttpException(400);
+    if (!r.ParseFromJsonString(payload)) {
+        return 400;
     }
 
     const std::string &token = r["token"];
@@ -177,7 +165,7 @@ void Server::Run()
 
     _device = FindDevice(token, &receiver, &to, &has_smsc);
     if (_device < 0) {
-        throw flinter::HttpException(403);
+        return 403;
     }
 
     bool good = false;
@@ -199,7 +187,7 @@ void Server::Run()
     const flinter::Tree &call = r["call"];
     for (flinter::Tree::const_iterator p = call.begin(); p != call.end(); ++p) {
         if (!ProcessCall(*p, m)) {
-            throw flinter::HttpException(400);
+            return 400;
         }
 
         good = true;
@@ -208,7 +196,7 @@ void Server::Run()
     const flinter::Tree &pdu = r["pdu"];
     if (pdu.children_size()) {
         if (!ProcessPdu(pdu, m, has_smsc)) {
-            throw flinter::HttpException(400);
+            return 400;
         }
 
         good = true;
@@ -217,14 +205,14 @@ void Server::Run()
     const flinter::Tree &sms = r["sms"];
     for (flinter::Tree::const_iterator p = sms.begin(); p != sms.end(); ++p) {
         if (!ProcessSms(*p, m)) {
-            throw flinter::HttpException(400);
+            return 400;
         }
 
         good = true;
     }
 
     if (!good) {
-        throw flinter::HttpException(400);
+        return 400;
     }
 
     m << "</table>\n"
@@ -238,9 +226,8 @@ void Server::Run()
         fprintf(stderr, "Failed to send email, still continue...\n");
     }
 
-    SetStatusCode(202);
-    SetContentType("application/json");
-    BODY << "{\"ret\":0}";
+    response->assign("{\"ret\":0}");
+    return 202;
 }
 
 bool Server::ProcessCallOld(const flinter::Tree &t, std::ostringstream &m)
@@ -520,4 +507,10 @@ void Server::Print(
       << "</tr>\n";
 }
 
-CGI_DISPATCH(Server, "/");
+int server_process(
+        const std::string &payload,
+        std::string *response)
+{
+    Server server;
+    return server.Run(payload, response);
+}

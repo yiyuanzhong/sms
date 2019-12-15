@@ -14,44 +14,78 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 #include <ClearSilver/ClearSilver.h>
 #include <curl/curl.h>
-#include <fcgiapp.h>
-#include <fcgios.h>
 
 #include <flinter/fastcgi/dispatcher.h>
+#include <flinter/babysitter.h>
 #include <flinter/cmdline.h>
+#include <flinter/daemon.h>
+#include <flinter/msleep.h>
 #include <flinter/openssl.h>
+#include <flinter/signals.h>
 #include <flinter/utility.h>
 
 #include "sms/server/configure.h"
+#include "sms/server/httpd.h"
 
-int main(int argc, char *argv[])
+static volatile sig_atomic_t g_quit = 0;
+static void on_signal_quit(int signum)
 {
-    argv = cmdline_setup(argc, argv);
-    if (!argv) {
-        fprintf(stderr, "Failed to setup cmdline library.\n");
-        return EXIT_FAILURE;
+    g_quit = signum;
+}
+
+static int initialize_signals(void)
+{
+    return signals_block_all()
+        || signals_default_all()
+        || signals_set_handler(SIGHUP , on_signal_quit)
+        || signals_set_handler(SIGINT , on_signal_quit)
+        || signals_set_handler(SIGQUIT, on_signal_quit)
+        || signals_set_handler(SIGTERM, on_signal_quit)
+        || signals_ignore(SIGPIPE)
+        || signals_unblock_all_except(SIGHUP, SIGINT, SIGQUIT, SIGTERM, 0);
+}
+
+static int main_loop(void)
+{
+    sigset_t empty;
+    if (sigemptyset(&empty)) {
+        return -1;
     }
 
-    // Initialize timezone before going multi-threaded.
-    tzset();
+    struct timespec tv;
+    memset(&tv, 0, sizeof(tv));
+    while (!g_quit) {
+        tv.tv_sec = 1;
+        tv.tv_nsec = 0;
+        int ret = pselect(0, nullptr, nullptr, nullptr, &tv, &empty);
+        if (ret < 0) {
+            if (errno != EINTR) {
+                return -1;
+            }
+        }
+    }
 
-    // Initialize weak (but fast) PRG rand(3).
-    randomize();
+    return 0;
+}
+
+static int callback(int argc, char *argv[])
+{
+    (void)argc;
+    (void)argv;
+
+    if (initialize_signals()) {
+        return EXIT_FAILURE;
+    }
 
     flinter::OpenSSLInitializer openssl_initializer;
 
     // Initialize libcurl.
     if (curl_global_init(CURL_GLOBAL_ALL)) {
         fprintf(stderr, "Failed to initialize libcurl.\n");
-        return EXIT_FAILURE;
-    }
-
-    // Initialize FastCGI.
-    if (FCGX_Init()) {
-        fprintf(stderr, "Failed to initialize FastCGI.\n");
         return EXIT_FAILURE;
     }
 
@@ -63,5 +97,30 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    return flinter::Dispatcher::main(argc, argv);
+    HTTPD httpd;
+    if (!httpd.Start()) {
+        return EXIT_FAILURE;
+    }
+
+    int ret = main_loop();
+
+    httpd.Stop();
+
+    configure_destroy();
+
+#if HAVE_NERR_SHUTDOWN
+    nerr_shutdown();
+#endif
+
+    return ret ? EXIT_FAILURE : EXIT_SUCCESS;
+}
+
+int main(int argc, char *argv[])
+{
+    babysitter_configure_t b;
+    memset(&b, 0, sizeof(b));
+    daemon_configure_t d;
+    memset(&d, 0, sizeof(d));
+    d.callback = callback;
+    return daemon_main(&d, argc, argv);
 }
