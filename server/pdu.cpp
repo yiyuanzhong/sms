@@ -333,7 +333,7 @@ static void decode_user_data(
                 throw Exception(Result::Failed, "bad 8 bit user data header length");
             }
 
-            TPUserDataHeader->Decode(s, TPUserDataHeaderLength);
+            TPUserDataHeader->Decode(s + 1, TPUserDataHeaderLength);
             TPUserData->assign(
                     reinterpret_cast<const char *>(s) + 1 + TPUserDataHeaderLength,
                     TPUserDataLength - 1 - TPUserDataHeaderLength);
@@ -499,6 +499,8 @@ void UserDataHeader::Decode(const void *buffer, size_t udhlen)
         uint8_t expected = 0;
         switch (InformationElementIdentifier) {
         case 0: expected = 3; break;
+        case 4: expected = 2; break;
+        case 5: expected = 4; break;
         case 8: expected = 4; break;
         };
 
@@ -512,6 +514,32 @@ void UserDataHeader::Decode(const void *buffer, size_t udhlen)
         udhlen -= Length;
         p += Length;
     }
+}
+
+std::shared_ptr<const ApplicationPortAddressingScheme>
+UserDataHeader::GetApplicationPortAddressingScheme() const
+{
+    auto p8 = _m.find(4);
+    if (p8 != _m.end()) {
+        assert(p8->second.length() == 2);
+        auto const p = reinterpret_cast<const uint8_t *>(p8->second.data());
+        auto r = std::make_shared<ApplicationPortAddressingScheme>();
+        r->DestinationPort = p[0];
+        r->OriginatorPort = p[1];
+        return r;
+    }
+
+    auto p16 = _m.find(5);
+    if (p16 != _m.end()) {
+        assert(p16->second.length() == 4);
+        auto const p = reinterpret_cast<const uint16_t *>(p16->second.data());
+        auto r = std::make_shared<ApplicationPortAddressingScheme>();
+        r->DestinationPort = ntohs(p[0]);
+        r->OriginatorPort = ntohs(p[1]);
+        return r;
+    }
+
+    return nullptr;
 }
 
 std::shared_ptr<const ConcatenatedShortMessages>

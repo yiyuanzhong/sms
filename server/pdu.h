@@ -21,6 +21,12 @@ enum class Type {
     Deliver,
 }; // enum class Type
 
+class ApplicationPortAddressingScheme {
+public:
+    uint16_t DestinationPort;
+    uint16_t OriginatorPort;
+}; // class ApplicationPortAddressingScheme
+
 class ConcatenatedShortMessages {
 public:
     uint16_t ReferenceNumber;
@@ -34,6 +40,9 @@ public:
 
     std::shared_ptr<const ConcatenatedShortMessages>
     GetConcatenatedShortMessages() const;
+
+    std::shared_ptr<const ApplicationPortAddressingScheme>
+    GetApplicationPortAddressingScheme() const;
 
 private:
     std::multimap<uint8_t, std::string> _m;
