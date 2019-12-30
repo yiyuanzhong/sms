@@ -694,8 +694,12 @@ int sms_run(struct sms *sms, const char *handshake)
                    sizeof(sms->buffer) - sms->total);
 
         if (ret < 0) {
+            if (errno == EAGAIN) {
+                continue;
+            }
             LOGE("read(): %d: %s", errno, strerror(errno));
             return -1;
+
         } else if (ret == 0) {
             LOGE("read(): peer hang");
             return -1;
