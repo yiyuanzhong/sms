@@ -9,6 +9,7 @@
 #include <flinter/encode.h>
 
 #include "sms/server/configure.h"
+#include "sms/server/database_pdu.h"
 
 Database::Database()
         : _driver(get_driver_instance())
@@ -16,6 +17,8 @@ Database::Database()
         , _pspdu(nullptr)
         , _pssms(nullptr)
         , _pscall(nullptr)
+        , _psselect(nullptr)
+        , _psarchive(nullptr)
 {
     // Intended left blank
 }
@@ -53,6 +56,8 @@ bool Database::Connect()
 void Database::Disconnect()
 {
     try {
+        _psarchive.reset();
+        _psselect.reset();
         _pscall.reset();
         _pssms.reset();
         _pspdu.reset();
@@ -131,6 +136,24 @@ bool Database::PreparePDU()
         _pspdu.reset(_conn->prepareStatement("INSERT INTO `pdu` "
                 "(`device`, `timestamp`, `uploaded`, `type`, `pdu`) "
                 "VALUES(?, ?, ?, ?, ?)"));
+        return true;
+
+    } catch (const sql::SQLException &e) {
+        fprintf(stderr, "Database exception: %s\n", e.what());
+        return false;
+    }
+}
+
+bool Database::PrepareArchive()
+{
+    if (_psarchive) {
+        return true;
+    }
+
+    try {
+        _psarchive.reset(_conn->prepareStatement("INSERT INTO `archive` "
+                "(`sms_id`, `device`, `timestamp`, `uploaded`, `type`, `pdu`) "
+                "VALUES(?, ?, ?, ?, ?, ?)"));
         return true;
 
     } catch (const sql::SQLException &e) {
@@ -228,6 +251,125 @@ bool Database::InsertSMS(
             return true;
         }
 
+        fprintf(stderr, "Database exception: %s\n", e.what());
+        return false;
+    }
+}
+
+bool Database::PrepareSelect()
+{
+    if (_psselect) {
+        return true;
+    }
+
+    try {
+        _psselect.reset(_conn->prepareStatement("SELECT `id`, `device`, "
+                "`timestamp`, `uploaded`, `type`, `pdu` FROM `pdu`"));
+        return true;
+
+    } catch (const sql::SQLException &e) {
+        fprintf(stderr, "Database exception: %s\n", e.what());
+        return false;
+    }
+}
+
+bool Database::PrepareDelete()
+{
+    if (_psdelete) {
+        return true;
+    }
+
+    try {
+        _psdelete.reset(_conn->prepareStatement(
+                "DELETE FROM `pdu` WHERE `id` = ?"));
+        return true;
+
+    } catch (const sql::SQLException &e) {
+        fprintf(stderr, "Database exception: %s\n", e.what());
+        return false;
+    }
+}
+
+bool Database::Select(std::list<DatabasePDU> *pdu)
+{
+    if (!Connect() || !PrepareSelect()) {
+        return false;
+    }
+
+    try {
+        std::unique_ptr<sql::ResultSet> rs(_psselect->executeQuery());
+        pdu->clear();
+        while (rs->next()) {
+            DatabasePDU p;
+            p.id        = rs->getInt(1);
+            p.device    = rs->getInt(2);
+            p.timestamp = rs->getInt64(3);
+            p.uploaded  = rs->getInt64(4);
+            p.type      = rs->getString(5);
+            p.pdu       = rs->getString(6);
+            pdu->push_back(p);
+        }
+
+        return true;
+    } catch (const sql::SQLException &e) {
+        fprintf(stderr, "Database exception: %s\n", e.what());
+        return false;
+    }
+}
+
+bool Database::InsertArchive(
+        const std::list<DatabasePDU> &pdu,
+        int64_t sent,
+        int64_t received,
+        const std::string &peer,
+        const std::string &subject,
+        const std::string &body)
+{
+    if (!Connect() || !PrepareSMS() || !PrepareDelete() || !PrepareArchive()) {
+        return false;
+    }
+
+    try {
+        std::unique_ptr<sql::Statement> st(_conn->createStatement());
+        st->execute("START TRANSACTION");
+
+        _pssms->setInt   (1, pdu.front().device);
+        _pssms->setString(2, pdu.front().type);
+        _pssms->setInt64 (3, sent);
+        _pssms->setInt64 (4, received);
+        _pssms->setString(5, peer);
+        _pssms->setString(6, subject);
+        _pssms->setString(7, body);
+        _pssms->execute();
+
+        std::unique_ptr<sql::ResultSet> rs(st->executeQuery(
+                    "SELECT LAST_INSERT_ID()"));
+
+        if (!rs->next()) {
+            st->execute("ROLLBACK");
+            return false;
+        }
+
+        const int sms_id = rs->getInt(1);
+        for (auto &&p : pdu) {
+            _psdelete->setInt(1, p.id);
+            _psdelete->execute();
+        }
+
+        for (auto &&p : pdu) {
+            _psarchive->setInt   (1, sms_id);
+            _psarchive->setInt   (2, p.device);
+            _psarchive->setInt64 (3, p.timestamp);
+            _psarchive->setInt64 (4, p.uploaded);
+            _psarchive->setString(5, p.type);
+            _psarchive->setString(6, p.pdu);
+            _psarchive->execute();
+        }
+
+        st->execute("COMMIT");
+        return true;
+
+    } catch (const sql::SQLException &e) {
         fprintf(stderr, "Database exception: %s\n", e.what());
         return false;
     }

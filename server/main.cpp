@@ -20,14 +20,17 @@
 #include <curl/curl.h>
 
 #include <flinter/fastcgi/dispatcher.h>
+#include <flinter/types/tree.h>
 #include <flinter/babysitter.h>
 #include <flinter/cmdline.h>
 #include <flinter/daemon.h>
+#include <flinter/logger.h>
 #include <flinter/msleep.h>
 #include <flinter/openssl.h>
 #include <flinter/signals.h>
 #include <flinter/utility.h>
 
+#include "sms/server/cleaner.h"
 #include "sms/server/configure.h"
 #include "sms/server/httpd.h"
 
@@ -49,7 +52,7 @@ static int initialize_signals(void)
         || signals_unblock_all_except(SIGHUP, SIGINT, SIGQUIT, SIGTERM, 0);
 }
 
-static int main_loop(void)
+static int main_loop(Cleaner *cleaner)
 {
     sigset_t empty;
     if (sigemptyset(&empty)) {
@@ -66,6 +69,11 @@ static int main_loop(void)
             if (errno != EINTR) {
                 return -1;
             }
+            continue;
+        }
+
+        if (!cleaner->Clean()) {
+            return -1;
         }
     }
 
@@ -97,14 +105,29 @@ static int callback(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    flinter::Logger::ProcessAttach(
+            (*g_configure)["log.file"].value(),
+            (*g_configure)["log.level"].as<int>(flinter::Logger::kLevelTrace));
+
+    LOG(INFO) << "INITIALIZE";
+
+    Cleaner cleaner;
+    if (!cleaner.Initialize()) {
+        return EXIT_FAILURE;
+    }
+
     HTTPD httpd;
     if (!httpd.Start()) {
         return EXIT_FAILURE;
     }
 
-    int ret = main_loop();
+    LOG(INFO) << "RUNNING";
+    int ret = main_loop(&cleaner);
+    LOG(INFO) << "SHUTDOWN";
 
     httpd.Stop();
+
+    cleaner.Shutdown();
 
     configure_destroy();
 
@@ -112,6 +135,8 @@ static int callback(int argc, char *argv[])
     nerr_shutdown();
 #endif
 
+    LOG(INFO) << "QUIT";
+    flinter::Logger::ProcessDetach();
     return ret ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 

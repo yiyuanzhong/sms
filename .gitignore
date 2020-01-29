@@ -1,3 +1,7 @@
 */.libs/
 bin
 etc
+lib
+log
+run
+tmp
