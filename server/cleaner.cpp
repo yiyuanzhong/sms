@@ -9,18 +9,23 @@ static void split(std::list<Cleaner::Deliver> *input,
                   std::list<std::list<Cleaner::Deliver>> *output,
                   std::list<Cleaner::Deliver> *duplicates)
 {
-    constexpr int64_t kMaximum = 86400000000000LL; // 1 day
+    constexpr int64_t kMaximumReception = 86400000000000LL; // 1 day
+    constexpr time_t kMaximumSending = 10000000000LL; // 10 seconds
 
     output->clear();
     duplicates->clear();
     for (std::list<Cleaner::Deliver>::iterator
          p = input->begin(); p != input->end();) {
 
+        printf("%u %u %ld %s\n", p->_c->ReferenceNumber, p->_c->Sequence, p->_pdu->TPServiceCentreTimeStamp, p->_pdu->TPUserData.c_str());
         auto t = p++;
         bool found = false;
         for (auto &&q : *output) {
-            if (t->_pdu->TPServiceCentreTimeStamp == q.front()._pdu->TPServiceCentreTimeStamp &&
-                t->_pdu->TPOriginatingAddress == q.front()._pdu->TPOriginatingAddress         ){
+            const time_t diff = t->_pdu->TPServiceCentreTimeStamp
+                              - q.front()._pdu->TPServiceCentreTimeStamp;
+
+            if (t->_pdu->TPOriginatingAddress == q.front()._pdu->TPOriginatingAddress &&
+                diff >= -kMaximumSending && diff <= kMaximumSending                   ){
 
                 q.splice(q.end(), *input, t);
                 found = true;
@@ -53,8 +58,8 @@ static void split(std::list<Cleaner::Deliver> *input,
                 continue;
             }
 
-            int64_t diff = q->_db.timestamp - p->_db.timestamp;
-            if (diff < -kMaximum || diff > kMaximum) {
+            const int64_t diff = q->_db.timestamp - p->_db.timestamp;
+            if (diff < -kMaximumReception || diff > kMaximumReception) {
                 continue;
             }
 
