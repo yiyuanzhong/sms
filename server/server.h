@@ -5,6 +5,7 @@
 
 extern int server_process(
         const std::string &payload,
-        std::string *response);
+        std::string *response,
+        void *cleaner);
 
 #endif // SMS_SERVER_SERVER_H

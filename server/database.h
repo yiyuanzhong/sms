@@ -31,7 +31,7 @@ public:
             const std::string &type,
             const std::string &raw);
 
-    bool InsertPDU(
+    int InsertPDU(
             int device,
             int64_t timestamp,
             int64_t uploaded,

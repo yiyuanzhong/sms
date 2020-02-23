@@ -18,7 +18,7 @@ public:
 
 }; // class Request
 
-HTTPD::HTTPD() : _daemon(nullptr)
+HTTPD::HTTPD(Cleaner *cleaner) : _cleaner(cleaner), _daemon(nullptr)
 {
     // Intended left blank
 }
@@ -361,7 +361,7 @@ int HTTPD::Handler(
     }
 
     std::string response;
-    int status = server_process(request->_payload, &response);
+    int status = server_process(request->_payload, &response, _cleaner);
     switch (status) {
     case MHD_HTTP_FOUND:
     case MHD_HTTP_MOVED_PERMANENTLY:

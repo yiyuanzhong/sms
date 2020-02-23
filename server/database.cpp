@@ -162,7 +162,7 @@ bool Database::PrepareArchive()
     }
 }
 
-bool Database::InsertPDU(
+int Database::InsertPDU(
         int device,
         int64_t timestamp,
         int64_t uploaded,
@@ -173,10 +173,10 @@ bool Database::InsertPDU(
         printf("=== SQL ===\nPDU %d %ld %ld %s %s\n=== SQL ===\n",
                 device, timestamp, uploaded, type.c_str(),
                 flinter::EncodeHex(pdu).c_str());
-        return true;
+        return 0;
 
     } else if (!Connect() || !PreparePDU()) {
-        return false;
+        return -1;
     }
 
     try {
@@ -186,15 +186,25 @@ bool Database::InsertPDU(
         _pspdu->setString(4, type);
         _pspdu->setString(5, pdu);
         _pspdu->execute();
-        return true;
+
+        std::unique_ptr<sql::Statement> st(_conn->createStatement());
+        std::unique_ptr<sql::ResultSet> rs(st->executeQuery(
+                    "SELECT LAST_INSERT_ID()"));
+
+        if (!rs->next()) {
+            return -1;
+        }
+
+        const int id = rs->getInt(1);
+        return id;
 
     } catch (const sql::SQLException &e) {
         if (e.getErrorCode() == 1062) {
-            return true;
+            return 0;
         }
 
         fprintf(stderr, "Database exception: %s\n", e.what());
-        return false;
+        return -1;
     }
 }
 

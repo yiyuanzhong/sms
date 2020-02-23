@@ -116,7 +116,7 @@ static int callback(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    HTTPD httpd;
+    HTTPD httpd(&cleaner);
     if (!httpd.Start()) {
         return EXIT_FAILURE;
     }

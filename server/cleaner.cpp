@@ -98,9 +98,10 @@ static void split(std::list<Cleaner::Deliver> *input,
     printf("after split: %lu\n", input->size());
 }
 
-static bool execute(
+template <>
+bool Cleaner::Execute(
         const std::list<Cleaner::Deliver> &pdus,
-        const std::list<Cleaner::Deliver> &duplicates)
+        const std::list<Cleaner::Deliver> &duplicates) const
 {
     auto p = pdus.begin();
     int64_t received = p->_db.timestamp;
@@ -148,6 +149,65 @@ bool Cleaner::FindDevice(int device, bool *has_smsc) const
     return true;
 }
 
+bool Cleaner::Add(const DatabasePDU &db)
+{
+    bool has_smsc;
+    if (!FindDevice(db.device, &has_smsc)) {
+        return false;
+    }
+
+    const bool sending = (db.type == "Outgoing");
+    pdu::PDU pdu(db.pdu, sending, has_smsc);
+    if (pdu.result() != pdu::Result::OK) {
+        return false;
+    }
+
+    std::shared_ptr<const pdu::ConcatenatedShortMessages> c;
+    switch (pdu.type()) {
+    case pdu::Type::Deliver:
+        if (pdu.deliver()->TPUserDataHeader.GetApplicationPortAddressingScheme()) {
+            return false;
+        }
+
+        c = pdu.deliver()->TPUserDataHeader.GetConcatenatedShortMessages();
+        if (!c) {
+            return Execute<Deliver>({Deliver(db, pdu.deliver(), nullptr)}, {});
+        }
+
+        _deliver[c->ReferenceNumber].push_back(Deliver(db, pdu.deliver(), c));
+        return true;
+
+    case pdu::Type::Submit:
+        if (pdu.submit()->TPUserDataHeader.GetApplicationPortAddressingScheme()) {
+            return false;
+        }
+
+        c = pdu.submit()->TPUserDataHeader.GetConcatenatedShortMessages();
+        if (!c) {
+            return true;
+        }
+
+        _submit[c->ReferenceNumber].push_back(Submit(db, pdu.submit(), c));
+        return true;
+    }
+
+    return false;
+}
+
+void Cleaner::Split(std::list<Deliver> *delivers)
+{
+    std::list<Deliver> duplicates;
+    std::list<std::list<Deliver>> table;
+    split(delivers, &table, &duplicates);
+
+    for (auto &&row : table) {
+        if (!Execute<Deliver>(row, duplicates)) {
+            printf("wowowow3 %u\n", row.front()._c->ReferenceNumber);
+            continue;
+        }
+    }
+}
+
 bool Cleaner::Initialize()
 {
     _deliver.clear();
@@ -161,61 +221,20 @@ bool Cleaner::Initialize()
 
     db.Disconnect();
     for (auto &&p : all) {
-        bool has_smsc;
-        if (!FindDevice(p.device, &has_smsc)) {
-            continue;
-        }
-
-        const bool sending = (p.type == "Outgoing");
-        pdu::PDU pdu(p.pdu, sending, has_smsc);
-        if (pdu.result() != pdu::Result::OK) {
-            continue;
-        }
-
-        std::shared_ptr<const pdu::ConcatenatedShortMessages> c;
-        switch (pdu.type()) {
-        case pdu::Type::Deliver:
-            if (pdu.deliver()->TPUserDataHeader.GetApplicationPortAddressingScheme()) {
-                continue;
-            }
-
-            c = pdu.deliver()->TPUserDataHeader.GetConcatenatedShortMessages();
-            if (!c) {
-                execute({Deliver(p, pdu.deliver(), nullptr)}, {});
-                continue;
-            }
-
-            _deliver[c->ReferenceNumber].push_back(Deliver(p, pdu.deliver(), c));
-            break;
-        case pdu::Type::Submit:
-            if (pdu.submit()->TPUserDataHeader.GetApplicationPortAddressingScheme()) {
-                continue;
-            }
-
-            c = pdu.submit()->TPUserDataHeader.GetConcatenatedShortMessages();
-            if (!c) {
-                continue;
-            }
-
-            _submit[c->ReferenceNumber].push_back(Submit(p, pdu.submit(), c));
-            break;
-        }
+        Add(p);
     }
 
+    Split();
+    DebugPrint();
+    return true;
+}
+
+void Cleaner::Split()
+{
     for (std::map<uint16_t, std::list<Deliver>>::iterator
          p = _deliver.begin(); p != _deliver.end();) {
 
-        std::list<std::list<Deliver>> pdus;
-        std::list<Deliver> duplicates;
-        split(&p->second, &pdus, &duplicates);
-
-        for (auto &&q : pdus) {
-            if (!execute(q, duplicates)) {
-                printf("wowowow3 %u\n", q.front()._c->ReferenceNumber);
-                continue;
-            }
-        }
-
+        Split(&p->second);
         if (p->second.empty()) {
             p = _deliver.erase(p);
         } else {
@@ -223,6 +242,44 @@ bool Cleaner::Initialize()
         }
     }
 
+    // TODO(yiyuanzhong): _submit
+}
+
+void Cleaner::DebugPrint() const
+{
+    printf("=== Deliver ===\n");
+    for (std::map<uint16_t, std::list<Deliver>>::const_iterator
+         p = _deliver.begin(); p != _deliver.end(); ++p) {
+
+        printf("-> %u\n", p->first);
+        for (std::list<Deliver>::const_iterator
+             q = p->second.begin(); q != p->second.end(); ++q) {
+
+            printf("---> %u %u\n", q->_c->Maximum, q->_c->Sequence);
+        }
+    }
+
+    printf("=== Submit ===\n");
+    for (std::map<uint16_t, std::list<Submit>>::const_iterator
+         p = _submit.begin(); p != _submit.end(); ++p) {
+
+        printf("-> %u\n", p->first);
+        for (std::list<Submit>::const_iterator
+             q = p->second.begin(); q != p->second.end(); ++q) {
+
+            printf("---> %u %u\n", q->_c->Maximum, q->_c->Sequence);
+        }
+    }
+}
+
+bool Cleaner::Received(const DatabasePDU &db)
+{
+    if (!Add(db)) {
+        return false;
+    }
+
+    Split();
+    DebugPrint();
     return true;
 }
 

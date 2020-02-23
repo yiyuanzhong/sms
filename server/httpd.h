@@ -6,9 +6,11 @@
 struct MHD_Connection;
 struct MHD_Daemon;
 
+class Cleaner;
+
 class HTTPD {
 public:
-    HTTPD();
+    explicit HTTPD(Cleaner *cleaner);
     ~HTTPD();
 
     bool Start();
@@ -39,6 +41,7 @@ protected:
     int Error(struct MHD_Connection *connection) const;
 
 private:
+    Cleaner *const _cleaner;
     struct MHD_Daemon *_daemon;
 
 }; // class HTTPD

@@ -10,14 +10,16 @@
 #include <flinter/encode.h>
 #include <flinter/utility.h>
 
+#include "sms/server/cleaner.h"
 #include "sms/server/configure.h"
 #include "sms/server/database.h"
+#include "sms/server/database_pdu.h"
 #include "sms/server/pdu.h"
 #include "sms/server/smtp.h"
 
 class Server {
 public:
-    Server();
+    explicit Server(Cleaner *cleaner);
     int Run(const std::string &payload, std::string *response);
 
 protected:
@@ -64,6 +66,7 @@ protected:
 private:
     int _device;
     int64_t _uploaded;
+    Cleaner *const _cleaner;
     std::unique_ptr<Database> _db;
 
 }; // class Server
@@ -120,7 +123,11 @@ std::string Server::FormatDateTime(int64_t t)
     return buffer;
 }
 
-Server::Server() : _device(-1), _uploaded(-1), _db(new Database)
+Server::Server(Cleaner *cleaner)
+        : _device(-1)
+        , _uploaded(-1)
+        , _cleaner(cleaner)
+        , _db(new Database)
 {
     // Intended left blank
 }
@@ -351,18 +358,21 @@ bool Server::ProcessPdu(
         std::ostringstream &m,
         bool has_smsc)
 {
+    bool good = true;
     std::list<std::pair<int64_t, pdu::PDU>> pdus;
     for (flinter::Tree::const_iterator p = tree.begin(); p != tree.end(); ++p) {
         bool v;
         const flinter::Tree &t = *p;
         const int64_t timestamp = flinter::convert<int64_t>(t["timestamp"], 0, &v);
         if (!v) {
-            return false;
+            good = false;
+            continue;
         }
 
         const std::string &type = t["type"];
         if (type.empty()) {
-            return false;
+            good = false;
+            continue;
         }
 
         bool sending;
@@ -371,21 +381,37 @@ bool Server::ProcessPdu(
         } else if (type == "Outgoing") {
             sending = true;
         } else {
-            return false;
+            good = false;
+            continue;
         }
 
         const std::string &pdu = t["pdu"];
         if (pdu.empty()) {
-            return false;
+            good = false;
+            continue;
         }
 
         std::string hex;
         if (flinter::DecodeHex(pdu, &hex)) {
-            return false;
+            good = false;
+            continue;
         }
 
-        if (!_db->InsertPDU(_device, timestamp, _uploaded, type, hex)) {
-            return false;
+        DatabasePDU dp;
+        dp.id        = 0;
+        dp.device    = _device;
+        dp.timestamp = timestamp;
+        dp.uploaded  = _uploaded;
+        dp.type      = type;
+        dp.pdu       = hex;
+        _cleaner->Received(dp);
+
+        int ret = _db->InsertPDU(_device, timestamp, _uploaded, type, hex);
+        if (ret < 0) {
+            good = false;
+            continue;
+        } else if (ret == 0) {
+            continue;
         }
 
         pdu::PDU s(hex, sending, has_smsc);
@@ -452,7 +478,7 @@ bool Server::ProcessPdu(
         }
     }
 
-    return true;
+    return good;
 }
 
 std::shared_ptr<const pdu::ConcatenatedShortMessages>
@@ -509,8 +535,11 @@ void Server::Print(
 
 int server_process(
         const std::string &payload,
-        std::string *response)
+        std::string *response,
+        void *cleaner)
 {
-    Server server;
+    Cleaner *const c = reinterpret_cast<Cleaner *>(cleaner);
+
+    Server server(c);
     return server.Run(payload, response);
 }

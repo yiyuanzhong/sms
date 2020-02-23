@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include <condition_variable>
 #include <list>
 #include <mutex>
 #include <unordered_map>
@@ -15,6 +16,8 @@ public:
     bool Initialize();
     bool Shutdown();
     bool Clean();
+
+    bool Received(const DatabasePDU &db);
 
     class Deliver {
     public:
@@ -40,8 +43,23 @@ public:
 
 protected:
     bool FindDevice(int device, bool *has_smsc) const;
+    void Split(std::list<Deliver> *delivers);
+    bool Add(const DatabasePDU &db);
+    void DebugPrint() const;
+    void Split();
+
+    template <class T>
+    bool Execute(
+            const std::list<T> &pdus,
+            const std::list<T> &duplicates) const;
+
+    // Only access from server thread, no need to lock
     std::map<uint16_t, std::list<Deliver>> _deliver;
     std::map<uint16_t, std::list<Submit>> _submit;
+
+    // Access from both server thread and main thread
+    std::list<std::pair<int64_t, std::function<bool ()>>> _done;
+    std::condition_variable _condition;
     std::mutex _mutex;
 
 }; // class Cleaner
