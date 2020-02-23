@@ -109,6 +109,8 @@ static int callback(int argc, char *argv[])
             (*g_configure)["log.file"].value(),
             (*g_configure)["log.level"].as<int>(flinter::Logger::kLevelTrace));
 
+    flinter::Logger::SetColorful((*g_configure)["log.colorful"].as<bool>(false));
+
     LOG(INFO) << "INITIALIZE";
 
     Cleaner cleaner;
