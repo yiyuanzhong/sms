@@ -1,5 +1,5 @@
-#ifndef SMS_SERVER_CLEANER_H
-#define SMS_SERVER_CLEANER_H
+#ifndef SMS_SERVER_PROCESSOR_H
+#define SMS_SERVER_PROCESSOR_H
 
 #include <stdint.h>
 
@@ -11,11 +11,11 @@
 #include "sms/server/database_pdu.h"
 #include "sms/server/pdu.h"
 
-class Cleaner {
+class Processor {
 public:
     bool Initialize();
     bool Shutdown();
-    bool Clean();
+    bool Cleanup();
 
     bool Received(const DatabasePDU &db);
 
@@ -62,6 +62,6 @@ protected:
     std::condition_variable _condition;
     std::mutex _mutex;
 
-}; // class Cleaner
+}; // class Processor
 
-#endif // SMS_SERVER_CLEANER_H
+#endif // SMS_SERVER_PROCESSOR_H

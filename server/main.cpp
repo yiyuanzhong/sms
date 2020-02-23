@@ -30,9 +30,9 @@
 #include <flinter/signals.h>
 #include <flinter/utility.h>
 
-#include "sms/server/cleaner.h"
 #include "sms/server/configure.h"
 #include "sms/server/httpd.h"
+#include "sms/server/processor.h"
 
 static volatile sig_atomic_t g_quit = 0;
 static void on_signal_quit(int signum)
@@ -52,7 +52,7 @@ static int initialize_signals(void)
         || signals_unblock_all_except(SIGHUP, SIGINT, SIGQUIT, SIGTERM, 0);
 }
 
-static int main_loop(Cleaner *cleaner)
+static int main_loop(Processor *processor)
 {
     sigset_t empty;
     if (sigemptyset(&empty)) {
@@ -72,7 +72,7 @@ static int main_loop(Cleaner *cleaner)
             continue;
         }
 
-        if (!cleaner->Clean()) {
+        if (!processor->Cleanup()) {
             return -1;
         }
     }
@@ -113,23 +113,23 @@ static int callback(int argc, char *argv[])
 
     LOG(INFO) << "INITIALIZE";
 
-    Cleaner cleaner;
-    if (!cleaner.Initialize()) {
+    Processor processor;
+    if (!processor.Initialize()) {
         return EXIT_FAILURE;
     }
 
-    HTTPD httpd(&cleaner);
+    HTTPD httpd(&processor);
     if (!httpd.Start()) {
         return EXIT_FAILURE;
     }
 
     LOG(INFO) << "RUNNING";
-    int ret = main_loop(&cleaner);
+    int ret = main_loop(&processor);
     LOG(INFO) << "SHUTDOWN";
 
     httpd.Stop();
 
-    cleaner.Shutdown();
+    processor.Shutdown();
 
     configure_destroy();
 

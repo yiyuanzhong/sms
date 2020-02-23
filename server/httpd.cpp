@@ -8,7 +8,7 @@
 #include <flinter/encode.h>
 
 #include "sms/server/configure.h"
-#include "sms/server/server.h"
+#include "sms/server/handler.h"
 
 class HTTPD::Request {
 public:
@@ -18,7 +18,9 @@ public:
 
 }; // class Request
 
-HTTPD::HTTPD(Cleaner *cleaner) : _cleaner(cleaner), _daemon(nullptr)
+HTTPD::HTTPD(Processor *processor)
+        : _daemon(nullptr)
+        , _processor(processor)
 {
     // Intended left blank
 }
@@ -361,7 +363,7 @@ int HTTPD::Handler(
     }
 
     std::string response;
-    int status = server_process(request->_payload, &response, _cleaner);
+    int status = handle(request->_payload, &response, _processor);
     switch (status) {
     case MHD_HTTP_FOUND:
     case MHD_HTTP_MOVED_PERMANENTLY:

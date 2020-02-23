@@ -1,4 +1,4 @@
-#include "sms/server/cleaner.h"
+#include "sms/server/processor.h"
 
 #include <flinter/types/tree.h>
 #include <flinter/logger.h>
@@ -6,16 +6,16 @@
 #include "sms/server/configure.h"
 #include "sms/server/database.h"
 
-static void split(std::list<Cleaner::Deliver> *input,
-                  std::list<std::list<Cleaner::Deliver>> *output,
-                  std::list<Cleaner::Deliver> *duplicates)
+static void split(std::list<Processor::Deliver> *input,
+                  std::list<std::list<Processor::Deliver>> *output,
+                  std::list<Processor::Deliver> *duplicates)
 {
     constexpr int64_t kMaximumReception = 86400000000000LL; // 1 day
     constexpr time_t kMaximumSending = 10000000000LL; // 10 seconds
 
     output->clear();
     duplicates->clear();
-    for (std::list<Cleaner::Deliver>::iterator
+    for (std::list<Processor::Deliver>::iterator
          p = input->begin(); p != input->end();) {
 
         CLOG.Debug("%u %u %ld %s", p->_c->ReferenceNumber, p->_c->Sequence, p->_pdu->TPServiceCentreTimeStamp, p->_pdu->TPUserData.c_str());
@@ -41,7 +41,7 @@ static void split(std::list<Cleaner::Deliver> *input,
     }
 
     for (auto &&one : *output) {
-        one.sort([] (const Cleaner::Deliver &a, const Cleaner::Deliver &b) -> bool {
+        one.sort([] (const Processor::Deliver &a, const Processor::Deliver &b) -> bool {
             return a._c->Sequence < b._c->Sequence ||
                    (a._c->Sequence == b._c->Sequence &&
                     a._db.timestamp < b._db.timestamp);
@@ -75,7 +75,7 @@ static void split(std::list<Cleaner::Deliver> *input,
         }
 
         uint16_t expected = 1;
-        for (std::list<Cleaner::Deliver>::const_iterator
+        for (std::list<Processor::Deliver>::const_iterator
              q = one.begin(); q != one.end(); ++q, ++expected) {
 
             if (q->_c->Sequence != expected) {
@@ -86,7 +86,7 @@ static void split(std::list<Cleaner::Deliver> *input,
         }
     }
 
-    for (std::list<std::list<Cleaner::Deliver>>::iterator
+    for (std::list<std::list<Processor::Deliver>>::iterator
          p = output->begin(); p != output->end();) {
 
         if (p->empty()) {
@@ -100,9 +100,9 @@ static void split(std::list<Cleaner::Deliver> *input,
 }
 
 template <>
-bool Cleaner::Execute(
-        const std::list<Cleaner::Deliver> &pdus,
-        const std::list<Cleaner::Deliver> &duplicates) const
+bool Processor::Execute(
+        const std::list<Processor::Deliver> &pdus,
+        const std::list<Processor::Deliver> &duplicates) const
 {
     auto p = pdus.begin();
     int64_t received = p->_db.timestamp;
@@ -134,7 +134,7 @@ bool Cleaner::Execute(
             body);
 }
 
-bool Cleaner::FindDevice(int device, bool *has_smsc) const
+bool Processor::FindDevice(int device, bool *has_smsc) const
 {
     const flinter::Tree &c = (*g_configure)["device"];
     std::ostringstream s;
@@ -150,7 +150,7 @@ bool Cleaner::FindDevice(int device, bool *has_smsc) const
     return true;
 }
 
-bool Cleaner::Add(const DatabasePDU &db)
+bool Processor::Add(const DatabasePDU &db)
 {
     bool has_smsc;
     if (!FindDevice(db.device, &has_smsc)) {
@@ -195,7 +195,7 @@ bool Cleaner::Add(const DatabasePDU &db)
     return false;
 }
 
-void Cleaner::Split(std::list<Deliver> *delivers)
+void Processor::Split(std::list<Deliver> *delivers)
 {
     std::list<Deliver> duplicates;
     std::list<std::list<Deliver>> table;
@@ -209,7 +209,7 @@ void Cleaner::Split(std::list<Deliver> *delivers)
     }
 }
 
-bool Cleaner::Initialize()
+bool Processor::Initialize()
 {
     _deliver.clear();
     _submit.clear();
@@ -230,7 +230,7 @@ bool Cleaner::Initialize()
     return true;
 }
 
-void Cleaner::Split()
+void Processor::Split()
 {
     for (std::map<uint16_t, std::list<Deliver>>::iterator
          p = _deliver.begin(); p != _deliver.end();) {
@@ -246,7 +246,7 @@ void Cleaner::Split()
     // TODO(yiyuanzhong): _submit
 }
 
-void Cleaner::DebugPrint() const
+void Processor::DebugPrint() const
 {
     CLOG.Debug("=== Deliver ===");
     for (std::map<uint16_t, std::list<Deliver>>::const_iterator
@@ -273,7 +273,7 @@ void Cleaner::DebugPrint() const
     }
 }
 
-bool Cleaner::Received(const DatabasePDU &db)
+bool Processor::Received(const DatabasePDU &db)
 {
     if (!Add(db)) {
         return false;
@@ -284,12 +284,12 @@ bool Cleaner::Received(const DatabasePDU &db)
     return true;
 }
 
-bool Cleaner::Shutdown()
+bool Processor::Shutdown()
 {
     return true; // Nothing to do
 }
 
-bool Cleaner::Clean()
+bool Processor::Cleanup()
 {
     return true;
 }

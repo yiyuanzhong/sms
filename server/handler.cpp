@@ -1,3 +1,5 @@
+#include "handler.h"
+
 #include <stdint.h>
 
 #include <fstream>
@@ -10,16 +12,16 @@
 #include <flinter/encode.h>
 #include <flinter/utility.h>
 
-#include "sms/server/cleaner.h"
 #include "sms/server/configure.h"
 #include "sms/server/database.h"
 #include "sms/server/database_pdu.h"
 #include "sms/server/pdu.h"
+#include "sms/server/processor.h"
 #include "sms/server/smtp.h"
 
-class Server {
+class Handler {
 public:
-    explicit Server(Cleaner *cleaner);
+    explicit Handler(Processor *processor);
     int Run(const std::string &payload, std::string *response);
 
 protected:
@@ -66,12 +68,12 @@ protected:
 private:
     int _device;
     int64_t _uploaded;
-    Cleaner *const _cleaner;
+    Processor *const _processor;
     std::unique_ptr<Database> _db;
 
-}; // class Server
+}; // class Handler
 
-std::string Server::FormatDuration(int64_t t)
+std::string Handler::FormatDuration(int64_t t)
 {
     const time_t s = t / 1000000000;
     char buffer[64];
@@ -85,7 +87,7 @@ std::string Server::FormatDuration(int64_t t)
     return buffer;
 }
 
-std::string Server::FormatTime(int64_t t)
+std::string Handler::FormatTime(int64_t t)
 {
     const time_t s = t / 1000000000;
     char buffer[64];
@@ -96,7 +98,7 @@ std::string Server::FormatTime(int64_t t)
     return buffer;
 }
 
-std::string Server::FormatDate(int64_t t)
+std::string Handler::FormatDate(int64_t t)
 {
     const time_t s = t / 1000000000;
     char buffer[64];
@@ -109,7 +111,7 @@ std::string Server::FormatDate(int64_t t)
     return buffer;
 }
 
-std::string Server::FormatDateTime(int64_t t)
+std::string Handler::FormatDateTime(int64_t t)
 {
     const time_t s = t / 1000000000;
     char buffer[64];
@@ -123,16 +125,16 @@ std::string Server::FormatDateTime(int64_t t)
     return buffer;
 }
 
-Server::Server(Cleaner *cleaner)
+Handler::Handler(Processor *processor)
         : _device(-1)
         , _uploaded(-1)
-        , _cleaner(cleaner)
+        , _processor(processor)
         , _db(new Database)
 {
     // Intended left blank
 }
 
-int Server::FindDevice(
+int Handler::FindDevice(
         const std::string &token,
         std::string *receiver,
         std::string *to,
@@ -152,7 +154,7 @@ int Server::FindDevice(
     return -1;
 }
 
-int Server::Run(const std::string &payload, std::string *response)
+int Handler::Run(const std::string &payload, std::string *response)
 {
     _uploaded = get_wall_clock_timestamp();
 
@@ -237,7 +239,7 @@ int Server::Run(const std::string &payload, std::string *response)
     return 202;
 }
 
-bool Server::ProcessCallOld(const flinter::Tree &t, std::ostringstream &m)
+bool Handler::ProcessCallOld(const flinter::Tree &t, std::ostringstream &m)
 {
     bool v;
 
@@ -272,7 +274,7 @@ bool Server::ProcessCallOld(const flinter::Tree &t, std::ostringstream &m)
             _device, timestamp, _uploaded, peer, duration, type, std::string());
 }
 
-bool Server::ProcessCall(const flinter::Tree &t, std::ostringstream &m)
+bool Handler::ProcessCall(const flinter::Tree &t, std::ostringstream &m)
 {
     bool v;
 
@@ -313,7 +315,7 @@ bool Server::ProcessCall(const flinter::Tree &t, std::ostringstream &m)
             _device, timestamp, _uploaded, peer, duration, type, raw);
 }
 
-bool Server::ProcessSms(const flinter::Tree &t, std::ostringstream &m)
+bool Handler::ProcessSms(const flinter::Tree &t, std::ostringstream &m)
 {
     bool v;
 
@@ -353,7 +355,7 @@ bool Server::ProcessSms(const flinter::Tree &t, std::ostringstream &m)
             _device, type, sent, received, peer, subject, body);
 }
 
-bool Server::ProcessPdu(
+bool Handler::ProcessPdu(
         const flinter::Tree &tree,
         std::ostringstream &m,
         bool has_smsc)
@@ -404,7 +406,7 @@ bool Server::ProcessPdu(
         dp.uploaded  = _uploaded;
         dp.type      = type;
         dp.pdu       = hex;
-        _cleaner->Received(dp);
+        _processor->Received(dp);
 
         int ret = _db->InsertPDU(_device, timestamp, _uploaded, type, hex);
         if (ret < 0) {
@@ -482,7 +484,7 @@ bool Server::ProcessPdu(
 }
 
 std::shared_ptr<const pdu::ConcatenatedShortMessages>
-Server::GetConcatenatedShortMessages(const pdu::PDU &pdu)
+Handler::GetConcatenatedShortMessages(const pdu::PDU &pdu)
 {
     switch (pdu.type()) {
     case pdu::Type::Deliver:
@@ -496,7 +498,7 @@ Server::GetConcatenatedShortMessages(const pdu::PDU &pdu)
     }
 }
 
-void Server::Print(
+void Handler::Print(
         int64_t timestamp,
         const pdu::Deliver *pdu,
         std::ostringstream &m)
@@ -516,7 +518,7 @@ void Server::Print(
       << "</tr>\n";
 }
 
-void Server::Print(
+void Handler::Print(
         int64_t timestamp,
         const pdu::Submit *pdu,
         std::ostringstream &m)
@@ -533,13 +535,12 @@ void Server::Print(
       << "</tr>\n";
 }
 
-int server_process(
-        const std::string &payload,
-        std::string *response,
-        void *cleaner)
+int handle(const std::string &payload,
+           std::string *response,
+           void *processor)
 {
-    Cleaner *const c = reinterpret_cast<Cleaner *>(cleaner);
+    Processor *const c = reinterpret_cast<Processor *>(processor);
 
-    Server server(c);
+    Handler server(c);
     return server.Run(payload, response);
 }
