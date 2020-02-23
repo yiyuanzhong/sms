@@ -10,6 +10,7 @@
 
 #include <flinter/convert.h>
 #include <flinter/encode.h>
+#include <flinter/logger.h>
 #include <flinter/utility.h>
 
 #include "sms/server/configure.h"
@@ -177,8 +178,6 @@ int Handler::Run(const std::string &payload, std::string *response)
         return 403;
     }
 
-    bool good = false;
-
     std::ostringstream m;
     m << "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" "
          "\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n"
@@ -193,46 +192,39 @@ int Handler::Run(const std::string &payload, std::string *response)
       << "<body>\n"
       << "<table>\n";
 
+    bool good = true;
+    size_t items = 0;
     const flinter::Tree &call = r["call"];
-    for (flinter::Tree::const_iterator p = call.begin(); p != call.end(); ++p) {
-        if (!ProcessCall(*p, m)) {
-            return 400;
-        }
-
-        good = true;
+    for (flinter::Tree::const_iterator p = call.begin(); p != call.end(); ++p, ++items) {
+        good &= ProcessCall(*p, m);
     }
 
     const flinter::Tree &pdu = r["pdu"];
     if (pdu.children_size()) {
-        if (!ProcessPdu(pdu, m, has_smsc)) {
-            return 400;
-        }
-
-        good = true;
+        good &= ProcessPdu(pdu, m, has_smsc);
+        items += pdu.children_size();
     }
 
     const flinter::Tree &sms = r["sms"];
-    for (flinter::Tree::const_iterator p = sms.begin(); p != sms.end(); ++p) {
-        if (!ProcessSms(*p, m)) {
-            return 400;
-        }
-
-        good = true;
+    for (flinter::Tree::const_iterator p = sms.begin(); p != sms.end(); ++p, ++items) {
+        good &= ProcessSms(*p, m);
     }
 
     if (!good) {
         return 400;
     }
 
-    m << "</table>\n"
-      << "</body>\n"
-      << "</html>\n";
+    if (items) {
+        m << "</table>\n"
+          << "</body>\n"
+          << "</html>\n";
 
-    SMTP smtp;
-    if (!smtp.Send(to, receiver, m.str(),
-            "text/html; charset=UTF-8", _uploaded / 1000000000)) {
+        SMTP smtp;
+        if (!smtp.Send(to, receiver, m.str(),
+                "text/html; charset=UTF-8", _uploaded / 1000000000)) {
 
-        fprintf(stderr, "Failed to send email, still continue...\n");
+            CLOG.Warn("Failed to send email, still continue...");
+        }
     }
 
     response->assign("{\"ret\":0}");
