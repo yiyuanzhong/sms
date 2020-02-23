@@ -9,7 +9,6 @@
 #include <flinter/encode.h>
 
 #include "sms/server/configure.h"
-#include "sms/server/database_pdu.h"
 
 Database::Database()
         : _driver(get_driver_instance())
@@ -86,19 +85,12 @@ bool Database::PrepareCall()
     }
 }
 
-bool Database::InsertCall(
-        int device,
-        int64_t timestamp,
-        int64_t uploaded,
-        const std::string &peer,
-        int64_t duration,
-        const std::string &type,
-        const std::string &raw)
+int Database::InsertCall(const db::Call &call)
 {
     if (Disabled()) {
         printf("=== SQL ===\nCALL %d %ld %ld %s %ld %s %s\n=== SQL ===\n",
-                device, timestamp, uploaded, peer.c_str(), duration,
-                type.c_str(), raw.c_str());
+               call.device, call.timestamp, call.uploaded, call.peer.c_str(),
+               call.duration, call.type.c_str(), call.raw.c_str());
         return true;
 
     } else if (!Connect() || !PrepareCall()) {
@@ -106,23 +98,23 @@ bool Database::InsertCall(
     }
 
     try {
-        _pscall->setInt   (1, device);
-        _pscall->setInt64 (2, timestamp);
-        _pscall->setInt64 (3, uploaded);
-        _pscall->setString(4, peer);
-        _pscall->setInt64 (5, duration);
-        _pscall->setString(6, type);
-        _pscall->setString(7, raw);
+        _pscall->setInt   (1, call.device);
+        _pscall->setInt64 (2, call.timestamp);
+        _pscall->setInt64 (3, call.uploaded);
+        _pscall->setString(4, call.peer);
+        _pscall->setInt64 (5, call.duration);
+        _pscall->setString(6, call.type);
+        _pscall->setString(7, call.raw);
         _pscall->execute();
-        return true;
+        return GetLastInsertID();
 
     } catch (const sql::SQLException &e) {
         if (e.getErrorCode() == 1062) {
-            return true;
+            return 0;
         }
 
         fprintf(stderr, "Database exception: %s\n", e.what());
-        return false;
+        return -1;
     }
 }
 
@@ -162,17 +154,12 @@ bool Database::PrepareArchive()
     }
 }
 
-int Database::InsertPDU(
-        int device,
-        int64_t timestamp,
-        int64_t uploaded,
-        const std::string &type,
-        const std::string &pdu)
+int Database::InsertPDU(const db::PDU &pdu)
 {
     if (Disabled()) {
         printf("=== SQL ===\nPDU %d %ld %ld %s %s\n=== SQL ===\n",
-                device, timestamp, uploaded, type.c_str(),
-                flinter::EncodeHex(pdu).c_str());
+               pdu.device, pdu.timestamp, pdu.uploaded, pdu.type.c_str(),
+               flinter::EncodeHex(pdu.pdu).c_str());
         return 0;
 
     } else if (!Connect() || !PreparePDU()) {
@@ -180,23 +167,13 @@ int Database::InsertPDU(
     }
 
     try {
-        _pspdu->setInt   (1, device);
-        _pspdu->setInt64 (2, timestamp);
-        _pspdu->setInt64 (3, uploaded);
-        _pspdu->setString(4, type);
-        _pspdu->setString(5, pdu);
+        _pspdu->setInt   (1, pdu.device);
+        _pspdu->setInt64 (2, pdu.timestamp);
+        _pspdu->setInt64 (3, pdu.uploaded);
+        _pspdu->setString(4, pdu.type);
+        _pspdu->setString(5, pdu.pdu);
         _pspdu->execute();
-
-        std::unique_ptr<sql::Statement> st(_conn->createStatement());
-        std::unique_ptr<sql::ResultSet> rs(st->executeQuery(
-                    "SELECT LAST_INSERT_ID()"));
-
-        if (!rs->next()) {
-            return -1;
-        }
-
-        const int id = rs->getInt(1);
-        return id;
+        return GetLastInsertID();
 
     } catch (const sql::SQLException &e) {
         if (e.getErrorCode() == 1062) {
@@ -226,19 +203,12 @@ bool Database::PrepareSMS()
     }
 }
 
-bool Database::InsertSMS(
-        int device,
-        const std::string &type,
-        int64_t sent,
-        int64_t received,
-        const std::string &peer,
-        const std::string &subject,
-        const std::string &body)
+int Database::InsertSMS(const db::SMS &sms)
 {
     if (Disabled()) {
         printf("=== SQL ===\nSMS %d %s %ld %ld %s %s %s\n=== SQL ===\n",
-                device, type.c_str(), sent, received, peer.c_str(),
-                subject.c_str(), body.c_str());
+               sms.device, sms.type.c_str(), sms.sent, sms.received,
+               sms.peer.c_str(), sms.subject.c_str(), sms.body.c_str());
         return true;
 
     } else if (!Connect() || !PrepareSMS()) {
@@ -246,23 +216,23 @@ bool Database::InsertSMS(
     }
 
     try {
-        _pssms->setInt   (1, device);
-        _pssms->setString(2, type);
-        _pssms->setInt64 (3, sent);
-        _pssms->setInt64 (4, received);
-        _pssms->setString(5, peer);
-        _pssms->setString(6, subject);
-        _pssms->setString(7, body);
+        _pssms->setInt   (1, sms.device);
+        _pssms->setString(2, sms.type);
+        _pssms->setInt64 (3, sms.sent);
+        _pssms->setInt64 (4, sms.received);
+        _pssms->setString(5, sms.peer);
+        _pssms->setString(6, sms.subject);
+        _pssms->setString(7, sms.body);
         _pssms->execute();
-        return true;
+        return GetLastInsertID();
 
     } catch (const sql::SQLException &e) {
         if (e.getErrorCode() == 1062) {
-            return true;
+            return 0;
         }
 
         fprintf(stderr, "Database exception: %s\n", e.what());
-        return false;
+        return -1;
     }
 }
 
@@ -300,7 +270,7 @@ bool Database::PrepareDelete()
     }
 }
 
-bool Database::Select(std::list<DatabasePDU> *pdu)
+bool Database::Select(std::list<db::PDU> *pdu)
 {
     if (!Connect() || !PrepareSelect()) {
         return false;
@@ -310,7 +280,7 @@ bool Database::Select(std::list<DatabasePDU> *pdu)
         std::unique_ptr<sql::ResultSet> rs(_psselect->executeQuery());
         pdu->clear();
         while (rs->next()) {
-            DatabasePDU p;
+            db::PDU p;
             p.id        = rs->getInt(1);
             p.device    = rs->getInt(2);
             p.timestamp = rs->getInt64(3);
@@ -328,7 +298,7 @@ bool Database::Select(std::list<DatabasePDU> *pdu)
 }
 
 bool Database::InsertArchive(
-        const std::list<DatabasePDU> &pdu,
+        const std::list<db::PDU> &pdu,
         int64_t sent,
         int64_t received,
         const std::string &peer,
@@ -389,4 +359,18 @@ bool Database::Disabled() const
 {
     const flinter::Tree &c = (*g_configure)["database"];
     return !!c["disabled"].as<int>();
+}
+
+int Database::GetLastInsertID()
+{
+    std::unique_ptr<sql::Statement> st(_conn->createStatement());
+    std::unique_ptr<sql::ResultSet> rs(st->executeQuery(
+                "SELECT LAST_INSERT_ID()"));
+
+    if (!rs->next()) {
+        return -1;
+    }
+
+    const int id = rs->getInt(1);
+    return id;
 }

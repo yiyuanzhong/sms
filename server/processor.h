@@ -8,7 +8,7 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "sms/server/database_pdu.h"
+#include "sms/server/db.h"
 #include "sms/server/pdu.h"
 
 class Processor {
@@ -17,34 +17,34 @@ public:
     bool Shutdown();
     bool Cleanup();
 
-    bool Received(const DatabasePDU &db);
+    bool Received(const db::PDU &db);
 
     class Deliver {
     public:
-        Deliver(const DatabasePDU &db,
+        Deliver(const db::PDU &db,
                 std::shared_ptr<const pdu::Deliver> pdu,
                 std::shared_ptr<const pdu::ConcatenatedShortMessages> c)
                 : _c(c), _pdu(pdu), _db(db) {}
         std::shared_ptr<const pdu::ConcatenatedShortMessages> _c;
         std::shared_ptr<const pdu::Deliver> _pdu;
-        DatabasePDU _db;
+        db::PDU _db;
     }; // class Message
 
     class Submit {
     public:
-        Submit(const DatabasePDU &db,
+        Submit(const db::PDU &db,
                std::shared_ptr<const pdu::Submit> pdu,
                std::shared_ptr<const pdu::ConcatenatedShortMessages> c)
                : _c(c), _pdu(pdu), _db(db) {}
         std::shared_ptr<const pdu::ConcatenatedShortMessages> _c;
         std::shared_ptr<const pdu::Submit> _pdu;
-        DatabasePDU _db;
+        db::PDU _db;
     }; // class Submit
 
 protected:
     bool FindDevice(int device, bool *has_smsc) const;
     void Split(std::list<Deliver> *delivers);
-    bool Add(const DatabasePDU &db);
+    bool Add(const db::PDU &db);
     void DebugPrint() const;
     void Split();
 

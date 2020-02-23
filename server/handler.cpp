@@ -1,4 +1,4 @@
-#include "handler.h"
+#include "sms/server/handler.h"
 
 #include <stdint.h>
 
@@ -14,7 +14,7 @@
 
 #include "sms/server/configure.h"
 #include "sms/server/database.h"
-#include "sms/server/database_pdu.h"
+#include "sms/server/db.h"
 #include "sms/server/pdu.h"
 #include "sms/server/processor.h"
 #include "sms/server/smtp.h"
@@ -270,8 +270,15 @@ bool Handler::ProcessCallOld(const flinter::Tree &t, std::ostringstream &m)
       << "<td>" << FormatDuration(duration) << "</td>\n"
       << "</tr>\n";
 
-    return _db->InsertCall(
-            _device, timestamp, _uploaded, peer, duration, type, std::string());
+    db::Call record;
+    record.device    = _device;
+    record.timestamp = timestamp;
+    record.uploaded  = _uploaded;
+    record.peer      = peer;
+    record.duration  = duration;
+    record.type      = type;
+
+    return _db->InsertCall(record) >= 0;
 }
 
 bool Handler::ProcessCall(const flinter::Tree &t, std::ostringstream &m)
@@ -311,8 +318,16 @@ bool Handler::ProcessCall(const flinter::Tree &t, std::ostringstream &m)
       << "<td>" << FormatDuration(duration) << "</td>\n"
       << "</tr>\n";
 
-    return _db->InsertCall(
-            _device, timestamp, _uploaded, peer, duration, type, raw);
+    db::Call record;
+    record.device    = _device;
+    record.timestamp = timestamp;
+    record.uploaded  = _uploaded;
+    record.peer      = peer;
+    record.duration  = duration;
+    record.type      = type;
+    record.raw       = raw;
+
+    return _db->InsertCall(record) >= 0;
 }
 
 bool Handler::ProcessSms(const flinter::Tree &t, std::ostringstream &m)
@@ -351,8 +366,16 @@ bool Handler::ProcessSms(const flinter::Tree &t, std::ostringstream &m)
       << "<tr><th colspan=\"4\">" << flinter::EscapeHtml(body) << "</th>\n"
       << "</tr>\n";
 
-    return _db->InsertSMS(
-            _device, type, sent, received, peer, subject, body);
+    db::SMS record;
+    record.device   = _device;
+    record.type     = type;
+    record.sent     = sent;
+    record.received = received;
+    record.peer     = peer;
+    record.subject  = subject;
+    record.body     = body;
+
+    return _db->InsertSMS(record) >= 0;
 }
 
 bool Handler::ProcessPdu(
@@ -399,16 +422,16 @@ bool Handler::ProcessPdu(
             continue;
         }
 
-        DatabasePDU dp;
-        dp.id        = 0;
-        dp.device    = _device;
-        dp.timestamp = timestamp;
-        dp.uploaded  = _uploaded;
-        dp.type      = type;
-        dp.pdu       = hex;
-        _processor->Received(dp);
+        db::PDU record;
+        record.id        = 0;
+        record.device    = _device;
+        record.timestamp = timestamp;
+        record.uploaded  = _uploaded;
+        record.type      = type;
+        record.pdu       = hex;
 
-        int ret = _db->InsertPDU(_device, timestamp, _uploaded, type, hex);
+        _processor->Received(record);
+        int ret = _db->InsertPDU(record);
         if (ret < 0) {
             good = false;
             continue;

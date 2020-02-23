@@ -110,7 +110,7 @@ bool Processor::Execute(
     time_t sent = p->_pdu->TPServiceCentreTimeStamp;
     const std::string peer = p->_pdu->TPOriginatingAddress;
 
-    std::list<DatabasePDU> dp;
+    std::list<db::PDU> dp;
     dp.push_back(p->_db);
 
     for (++p; p != pdus.end(); ++p) {
@@ -150,7 +150,7 @@ bool Processor::FindDevice(int device, bool *has_smsc) const
     return true;
 }
 
-bool Processor::Add(const DatabasePDU &db)
+bool Processor::Add(const db::PDU &db)
 {
     bool has_smsc;
     if (!FindDevice(db.device, &has_smsc)) {
@@ -215,7 +215,7 @@ bool Processor::Initialize()
     _submit.clear();
 
     Database db;
-    std::list<DatabasePDU> all;
+    std::list<db::PDU> all;
     if (!db.Select(&all)) {
         return false;
     }
@@ -273,7 +273,7 @@ void Processor::DebugPrint() const
     }
 }
 
-bool Processor::Received(const DatabasePDU &db)
+bool Processor::Received(const db::PDU &db)
 {
     if (!Add(db)) {
         return false;

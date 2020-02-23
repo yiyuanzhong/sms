@@ -7,13 +7,13 @@
 #include <memory>
 #include <string>
 
+#include "sms/server/db.h"
+
 namespace sql {
 class Connection;
 class Driver;
 class PreparedStatement;
 } // namespace sql
-
-class DatabasePDU;
 
 class Database {
 public:
@@ -22,36 +22,16 @@ public:
 
     void Disconnect();
 
-    bool InsertCall(
-            int device,
-            int64_t timestamp,
-            int64_t uploaded,
-            const std::string &peer,
-            int64_t duration,
-            const std::string &type,
-            const std::string &raw);
+    int InsertCall(const db::Call &call);
 
-    int InsertPDU(
-            int device,
-            int64_t timestamp,
-            int64_t uploaded,
-            const std::string &type,
-            const std::string &pdu);
+    int InsertPDU(const db::PDU &pdu);
 
-    bool InsertSMS(
-            int device,
-            const std::string &type,
-            int64_t sent,
-            int64_t received,
-            const std::string &peer,
-            const std::string &subject,
-            const std::string &body);
+    int InsertSMS(const db::SMS &sms);
 
-    bool Select(
-            std::list<DatabasePDU> *pdu);
+    bool Select(std::list<db::PDU> *pdu);
 
     bool InsertArchive(
-            const std::list<DatabasePDU> &pdu,
+            const std::list<db::PDU> &pdu,
             int64_t sent,
             int64_t received,
             const std::string &peer,
@@ -67,6 +47,8 @@ protected:
     bool PrepareSelect();
     bool PrepareDelete();
     bool PrepareArchive();
+
+    int GetLastInsertID();
 
 private:
     sql::Driver *const _driver;
