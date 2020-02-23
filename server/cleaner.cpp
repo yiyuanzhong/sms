@@ -1,6 +1,7 @@
 #include "sms/server/cleaner.h"
 
 #include <flinter/types/tree.h>
+#include <flinter/logger.h>
 
 #include "sms/server/configure.h"
 #include "sms/server/database.h"
@@ -17,7 +18,7 @@ static void split(std::list<Cleaner::Deliver> *input,
     for (std::list<Cleaner::Deliver>::iterator
          p = input->begin(); p != input->end();) {
 
-        printf("%u %u %ld %s\n", p->_c->ReferenceNumber, p->_c->Sequence, p->_pdu->TPServiceCentreTimeStamp, p->_pdu->TPUserData.c_str());
+        CLOG.Debug("%u %u %ld %s", p->_c->ReferenceNumber, p->_c->Sequence, p->_pdu->TPServiceCentreTimeStamp, p->_pdu->TPUserData.c_str());
         auto t = p++;
         bool found = false;
         for (auto &&q : *output) {
@@ -68,7 +69,7 @@ static void split(std::list<Cleaner::Deliver> *input,
         }
 
         if (one.size() != one.front()._c->Maximum) {
-            printf("wowowow1 %u %u %lu\n", one.front()._c->ReferenceNumber, one.front()._c->Maximum, one.size());
+            CLOG.Debug("wowowow1 %u %u %lu", one.front()._c->ReferenceNumber, one.front()._c->Maximum, one.size());
             input->splice(input->end(), one);
             continue;
         }
@@ -78,7 +79,7 @@ static void split(std::list<Cleaner::Deliver> *input,
              q = one.begin(); q != one.end(); ++q, ++expected) {
 
             if (q->_c->Sequence != expected) {
-                printf("wowowow2 %u %u %lu\n", one.front()._c->ReferenceNumber, one.front()._c->Maximum, one.size());
+                CLOG.Debug("wowowow2 %u %u %lu", one.front()._c->ReferenceNumber, one.front()._c->Maximum, one.size());
                 input->splice(input->end(), one);
                 break;
             }
@@ -95,7 +96,7 @@ static void split(std::list<Cleaner::Deliver> *input,
         }
     }
 
-    printf("after split: %lu\n", input->size());
+    CLOG.Debug("after split: %lu", input->size());
 }
 
 template <>
@@ -202,7 +203,7 @@ void Cleaner::Split(std::list<Deliver> *delivers)
 
     for (auto &&row : table) {
         if (!Execute<Deliver>(row, duplicates)) {
-            printf("wowowow3 %u\n", row.front()._c->ReferenceNumber);
+            CLOG.Debug("wowowow3 %u", row.front()._c->ReferenceNumber);
             continue;
         }
     }
@@ -247,27 +248,27 @@ void Cleaner::Split()
 
 void Cleaner::DebugPrint() const
 {
-    printf("=== Deliver ===\n");
+    CLOG.Debug("=== Deliver ===");
     for (std::map<uint16_t, std::list<Deliver>>::const_iterator
          p = _deliver.begin(); p != _deliver.end(); ++p) {
 
-        printf("-> %u\n", p->first);
+        CLOG.Debug("-> %u", p->first);
         for (std::list<Deliver>::const_iterator
              q = p->second.begin(); q != p->second.end(); ++q) {
 
-            printf("---> %u %u\n", q->_c->Maximum, q->_c->Sequence);
+            CLOG.Debug("---> %u %u", q->_c->Maximum, q->_c->Sequence);
         }
     }
 
-    printf("=== Submit ===\n");
+    CLOG.Debug("=== Submit ===");
     for (std::map<uint16_t, std::list<Submit>>::const_iterator
          p = _submit.begin(); p != _submit.end(); ++p) {
 
-        printf("-> %u\n", p->first);
+        CLOG.Debug("-> %u", p->first);
         for (std::list<Submit>::const_iterator
              q = p->second.begin(); q != p->second.end(); ++q) {
 
-            printf("---> %u %u\n", q->_c->Maximum, q->_c->Sequence);
+            CLOG.Debug("---> %u %u", q->_c->Maximum, q->_c->Sequence);
         }
     }
 }
