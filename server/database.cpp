@@ -91,10 +91,10 @@ int Database::InsertCall(const db::Call &call)
         printf("=== SQL ===\nCALL %d %ld %ld %s %ld %s %s\n=== SQL ===\n",
                call.device, call.timestamp, call.uploaded, call.peer.c_str(),
                call.duration, call.type.c_str(), call.raw.c_str());
-        return true;
+        return 0;
 
     } else if (!Connect() || !PrepareCall()) {
-        return false;
+        return -1;
     }
 
     try {
@@ -209,10 +209,10 @@ int Database::InsertSMS(const db::SMS &sms)
         printf("=== SQL ===\nSMS %d %s %ld %ld %s %s %s\n=== SQL ===\n",
                sms.device, sms.type.c_str(), sms.sent, sms.received,
                sms.peer.c_str(), sms.subject.c_str(), sms.body.c_str());
-        return true;
+        return 0;
 
     } else if (!Connect() || !PrepareSMS()) {
-        return false;
+        return -1;
     }
 
     try {
