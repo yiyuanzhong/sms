@@ -96,11 +96,16 @@ static int callback(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    flinter::Logger::ProcessAttach(
-            (*g_configure)["log.file"].value(),
-            (*g_configure)["log.level"].as<int>(flinter::Logger::kLevelTrace));
+    const flinter::Tree &log = (*g_configure)["log"];
+    if (isatty(STDIN_FILENO)) {
+        flinter::Logger::SetFilter(
+                log["level"].as<int>(flinter::Logger::kLevelDebug));
 
-    flinter::Logger::SetColorful((*g_configure)["log.colorful"].as<bool>(false));
+    } else {
+        flinter::Logger::SetColorful(log["colorful"].as<bool>(false));
+        flinter::Logger::ProcessAttach(log["file"].value(),
+                log["level"].as<int>(flinter::Logger::kLevelTrace));
+    }
 
     // Initialize libcurl.
     if (curl_global_init(CURL_GLOBAL_ALL)) {
