@@ -91,15 +91,6 @@ static int callback(int argc, char *argv[])
 
     flinter::OpenSSLInitializer openssl_initializer;
 
-    // Initialize libcurl.
-    if (curl_global_init(CURL_GLOBAL_ALL)) {
-        fprintf(stderr, "Failed to initialize libcurl.\n");
-        return EXIT_FAILURE;
-    }
-
-    // Initialize ClearSilver.
-    // Nothing to do.
-
     if (configure_load("../etc/server.conf")) {
         fprintf(stderr, "Failed to load configure.\n");
         return EXIT_FAILURE;
@@ -110,6 +101,15 @@ static int callback(int argc, char *argv[])
             (*g_configure)["log.level"].as<int>(flinter::Logger::kLevelTrace));
 
     flinter::Logger::SetColorful((*g_configure)["log.colorful"].as<bool>(false));
+
+    // Initialize libcurl.
+    if (curl_global_init(CURL_GLOBAL_ALL)) {
+        CLOG.Error("Failed to initialize libcurl.");
+        return EXIT_FAILURE;
+    }
+
+    // Initialize ClearSilver.
+    // Nothing to do.
 
     LOG(INFO) << "INITIALIZE";
 
@@ -131,11 +131,11 @@ static int callback(int argc, char *argv[])
 
     processor.Shutdown();
 
-    configure_destroy();
-
 #if HAVE_NERR_SHUTDOWN
     nerr_shutdown();
 #endif
+
+    configure_destroy();
 
     LOG(INFO) << "QUIT";
     flinter::Logger::ProcessDetach();

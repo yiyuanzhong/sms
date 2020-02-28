@@ -7,6 +7,7 @@
 
 #include <flinter/types/tree.h>
 #include <flinter/encode.h>
+#include <flinter/logger.h>
 
 #include "sms/server/configure.h"
 
@@ -46,7 +47,7 @@ bool Database::Connect()
         return true;
 
     } catch (const sql::SQLException &e) {
-        fprintf(stderr, "Database exception: %s\n", e.what());
+        CLOG.Warn("Database exception: %d: %s", e.getErrorCode(), e.what());
         Disconnect();
         return false;
     }
@@ -62,6 +63,7 @@ void Database::Disconnect()
         _pspdu.reset();
         _conn.reset();
     } catch (const sql::SQLException &e) {
+        CLOG.Warn("Database exception: %d: %s", e.getErrorCode(), e.what());
         // Eat it
     }
 }
@@ -80,7 +82,7 @@ bool Database::PrepareCall()
         return true;
 
     } catch (const sql::SQLException &e) {
-        fprintf(stderr, "Database exception: %s\n", e.what());
+        CLOG.Warn("Database exception: %d: %s", e.getErrorCode(), e.what());
         return false;
     }
 }
@@ -113,7 +115,7 @@ int Database::InsertCall(const db::Call &call)
             return 0;
         }
 
-        fprintf(stderr, "Database exception: %s\n", e.what());
+        CLOG.Warn("Database exception: %d: %s", e.getErrorCode(), e.what());
         return -1;
     }
 }
@@ -131,7 +133,7 @@ bool Database::PreparePDU()
         return true;
 
     } catch (const sql::SQLException &e) {
-        fprintf(stderr, "Database exception: %s\n", e.what());
+        CLOG.Warn("Database exception: %d: %s", e.getErrorCode(), e.what());
         return false;
     }
 }
@@ -149,7 +151,7 @@ bool Database::PrepareArchive()
         return true;
 
     } catch (const sql::SQLException &e) {
-        fprintf(stderr, "Database exception: %s\n", e.what());
+        CLOG.Warn("Database exception: %d: %s", e.getErrorCode(), e.what());
         return false;
     }
 }
@@ -180,7 +182,7 @@ int Database::InsertPDU(const db::PDU &pdu)
             return 0;
         }
 
-        fprintf(stderr, "Database exception: %s\n", e.what());
+        CLOG.Warn("Database exception: %d: %s", e.getErrorCode(), e.what());
         return -1;
     }
 }
@@ -198,7 +200,7 @@ bool Database::PrepareSMS()
         return true;
 
     } catch (const sql::SQLException &e) {
-        fprintf(stderr, "Database exception: %s\n", e.what());
+        CLOG.Warn("Database exception: %d: %s", e.getErrorCode(), e.what());
         return false;
     }
 }
@@ -231,7 +233,7 @@ int Database::InsertSMS(const db::SMS &sms)
             return 0;
         }
 
-        fprintf(stderr, "Database exception: %s\n", e.what());
+        CLOG.Warn("Database exception: %d: %s", e.getErrorCode(), e.what());
         return -1;
     }
 }
@@ -248,7 +250,7 @@ bool Database::PrepareSelect()
         return true;
 
     } catch (const sql::SQLException &e) {
-        fprintf(stderr, "Database exception: %s\n", e.what());
+        CLOG.Warn("Database exception: %d: %s", e.getErrorCode(), e.what());
         return false;
     }
 }
@@ -265,7 +267,7 @@ bool Database::PrepareDelete()
         return true;
 
     } catch (const sql::SQLException &e) {
-        fprintf(stderr, "Database exception: %s\n", e.what());
+        CLOG.Warn("Database exception: %d: %s", e.getErrorCode(), e.what());
         return false;
     }
 }
@@ -292,7 +294,7 @@ bool Database::Select(std::list<db::PDU> *pdu)
 
         return true;
     } catch (const sql::SQLException &e) {
-        fprintf(stderr, "Database exception: %s\n", e.what());
+        CLOG.Warn("Database exception: %d: %s", e.getErrorCode(), e.what());
         return false;
     }
 }
@@ -350,7 +352,7 @@ bool Database::InsertArchive(
         return true;
 
     } catch (const sql::SQLException &e) {
-        fprintf(stderr, "Database exception: %s\n", e.what());
+        CLOG.Warn("Database exception: %d: %s", e.getErrorCode(), e.what());
         return false;
     }
 }
