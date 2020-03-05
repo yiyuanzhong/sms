@@ -255,6 +255,14 @@ static size_t sms_on_command(
     return i;
 }
 
+static void sms_increase_when(struct sms *sms)
+{
+    /* Make sure every time we call handlers, we provide a different `when` */
+    ++sms->when.tv_nsec;
+    sms->when.tv_sec += sms->when.tv_nsec / 1000000000;
+    sms->when.tv_nsec %= 1000000000;
+}
+
 static int sms_process(struct sms *sms)
 {
     struct section sections[256];
@@ -295,6 +303,8 @@ static int sms_process(struct sms *sms)
                 if (ret < 0) {
                     return -1;
                 }
+
+                sms_increase_when(sms);
             }
 
             skipf = i + 1 - (size_t)ret;
@@ -310,6 +320,8 @@ static int sms_process(struct sms *sms)
         if (sms_on_urc(sms, sections + i)) {
             return -1;
         }
+
+        sms_increase_when(sms);
     }
 
     sms->total -= (sections[csection - 1].to - 1)->to;
