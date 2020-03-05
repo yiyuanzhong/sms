@@ -8,6 +8,7 @@
 #include <flinter/types/tree.h>
 #include <flinter/types/uuid.h>
 #include <flinter/encode.h>
+#include <flinter/logger.h>
 
 #include "sms/server/configure.h"
 
@@ -198,7 +199,7 @@ bool SMTP::Send(
 
         Disconnect();
         if (ret) {
-            fprintf(stderr, "curl_easy_perform() = %d\n", ret);
+            CLOG.Warn("curl_easy_perform() = %d", ret);
         }
     }
 
