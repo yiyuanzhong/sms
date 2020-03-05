@@ -415,22 +415,21 @@ bool Handler::ProcessPdu(
         }
 
         db::PDU record;
-        record.id        = 0;
         record.device    = _device;
         record.timestamp = timestamp;
         record.uploaded  = _uploaded;
         record.type      = type;
         record.pdu       = hex;
 
-        _processor->Received(record);
-        int ret = _db->InsertPDU(record);
-        if (ret < 0) {
+        record.id = _db->InsertPDU(record);
+        if (record.id < 0) {
             good = false;
             continue;
-        } else if (ret == 0) {
+        } else if (record.id == 0) {
             continue;
         }
 
+        _processor->Received(record);
         pdu::PDU s(hex, sending, has_smsc);
         switch (s.result()) {
         case pdu::Result::Failed:
