@@ -49,8 +49,8 @@ struct sms {
     int64_t delay;
     int fd;
 
-    int requesting;
     int64_t cooling;
+    int64_t requesting;
     sms_command_t callback;
 
     char buffer[65536];
@@ -92,9 +92,9 @@ static int sms_do_send(
         return -1;
     }
 
+    sms->requesting = get_monotonic_timestamp();
     LOGT("SEND [%s]", command);
     sms->callback = callback;
-    sms->requesting = 1;
     return 0;
 }
 
@@ -603,7 +603,9 @@ void sms_close(struct sms *sms)
 
 int sms_run(struct sms *sms, const char *handshake)
 {
-    static const int64_t kHeartbeat = 1000000000LL; /* 1s */
+    static const int64_t kRequesting = 10000000000LL; /* 10s   */
+    static const int64_t kHeartbeat  = 1000000000LL;  /* 1s    */
+    static const int64_t kDelay      = 200000000LL;   /* 200ms */
 
     struct timespec tv;
     int64_t heartbeat;
@@ -635,7 +637,7 @@ int sms_run(struct sms *sms, const char *handshake)
     while (!g_quit) {
         now = get_monotonic_timestamp();
 
-        delay = 100000000LL; /* 100ms */
+        delay = kDelay;
         if (sms->last >= 0) {
             diff = sms->last - now;
             if (diff <= 0) {
@@ -651,6 +653,13 @@ int sms_run(struct sms *sms, const char *handshake)
 
             } else if (diff < delay) {
                 delay = diff;
+            }
+        }
+
+        if (sms->requesting) {
+            if (now <= sms->requesting + kRequesting) {
+                LOGE("Request timed out");
+                return -1;
             }
         }
 

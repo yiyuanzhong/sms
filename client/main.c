@@ -51,6 +51,7 @@ static int callback(int argc, char *argv[])
         LOGW("Failed to open log file, keep going...");
     }
 
+    LOGI("START");
     if (!(c = configure_create("../etc/sms.conf"))) {
         LOGE("Failed to open configure: %d: %s", errno, strerror(errno));
         logger_shutdown();
