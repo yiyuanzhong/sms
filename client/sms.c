@@ -605,7 +605,7 @@ int sms_run(struct sms *sms, const char *handshake)
 {
     static const int64_t kRequesting = 10000000000LL; /* 10s   */
     static const int64_t kHeartbeat  = 1000000000LL;  /* 1s    */
-    static const int64_t kDelay      = 200000000LL;   /* 200ms */
+    static const int64_t kTick       = 100000000LL;   /* 100ms */
 
     struct timespec tv;
     int64_t heartbeat;
@@ -637,7 +637,7 @@ int sms_run(struct sms *sms, const char *handshake)
     while (!g_quit) {
         now = get_monotonic_timestamp();
 
-        delay = kDelay;
+        delay = kTick;
         if (sms->last >= 0) {
             diff = sms->last - now;
             if (diff <= 0) {
