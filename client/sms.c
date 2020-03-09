@@ -657,7 +657,7 @@ int sms_run(struct sms *sms, const char *handshake)
         }
 
         if (sms->requesting) {
-            if (now <= sms->requesting + kRequesting) {
+            if (now >= sms->requesting + kRequesting) {
                 LOGE("Request timed out");
                 return -1;
             }
