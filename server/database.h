@@ -9,16 +9,15 @@
 
 #include "sms/server/db.h"
 
-namespace sql {
-class Connection;
-class Driver;
-class PreparedStatement;
-} // namespace sql
-
 class Database {
 public:
     Database();
     ~Database();
+
+    static bool ThreadInitialize();
+    static void ThreadCleanup();
+    static bool Initialize();
+    static void Cleanup();
 
     void Disconnect();
 
@@ -41,25 +40,16 @@ public:
 protected:
     bool Disabled() const;
     bool Connect();
-    bool PrepareCall();
     bool PreparePDU();
     bool PrepareSMS();
+    bool PrepareCall();
     bool PrepareSelect();
     bool PrepareDelete();
     bool PrepareArchive();
 
-    int GetLastInsertID();
-
 private:
-    sql::Driver *const _driver;
-    std::unique_ptr<sql::Connection> _conn;
-
-    std::unique_ptr<sql::PreparedStatement> _pspdu;
-    std::unique_ptr<sql::PreparedStatement> _pssms;
-    std::unique_ptr<sql::PreparedStatement> _pscall;
-    std::unique_ptr<sql::PreparedStatement> _psselect;
-    std::unique_ptr<sql::PreparedStatement> _psdelete;
-    std::unique_ptr<sql::PreparedStatement> _psarchive;
+    class Context;
+    Context *const _c;
 
 }; // class Database
 

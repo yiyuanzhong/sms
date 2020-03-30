@@ -28,7 +28,7 @@ SUBDIRS = .
 
 # "d" will be appended for each STATICS, ABC will become -lABC_debug eventually
 STATICS = flinter/output/lib/flinter
-LIBRARIES = neo_cgi neo_cs neo_utl pthread uuid crypto ssl jsoncpp icuuc curl mysqlcppconn microhttpd
+LIBRARIES = neo_cgi neo_cs neo_utl pthread uuid crypto ssl jsoncpp icuuc curl mysqlclient_r microhttpd
 PKGCONFIGS =
 
 BINPATH =
