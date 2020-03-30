@@ -31,6 +31,7 @@
 #include <flinter/utility.h>
 
 #include "sms/server/configure.h"
+#include "sms/server/database.h"
 #include "sms/server/httpd.h"
 #include "sms/server/processor.h"
 
@@ -113,6 +114,11 @@ static int callback(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    if (!Database::Initialize()) {
+        CLOG.Error("Failed to initialize Database.");
+        return EXIT_FAILURE;
+    }
+
     // Initialize ClearSilver.
     // Nothing to do.
 
@@ -139,6 +145,8 @@ static int callback(int argc, char *argv[])
 #if HAVE_NERR_SHUTDOWN
     nerr_shutdown();
 #endif
+
+    Database::Cleanup();
 
     configure_destroy();
 
