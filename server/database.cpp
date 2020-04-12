@@ -69,7 +69,7 @@ static int Insert(MYSQL_STMT *st, MYSQL_BIND *bind)
     return static_cast<int>(mysql_stmt_insert_id(st));
 }
 
-static int Delete(MYSQL_STMT *st, int id)
+static int DoDelete(MYSQL_STMT *st, int id)
 {
     MYSQL_BIND bind[1];
     memset(bind, 0, sizeof(bind));
@@ -550,13 +550,10 @@ static int DoInsertArchive(
     return Insert(st, bind);
 }
 
-bool Database::InsertArchive(
+bool Database::InsertSMS(
+        const db::SMS &sms,
         const std::list<db::PDU> &pdu,
-        int64_t sent,
-        int64_t received,
-        const std::string &peer,
-        const std::string &subject,
-        const std::string &body)
+        const std::list<db::PDU> &duplicated)
 {
     if (!Connect() || !PrepareSMS() || !PrepareDelete() || !PrepareArchive()) {
         return false;
@@ -568,15 +565,6 @@ bool Database::InsertArchive(
         return false;
     }
 
-    db::SMS sms;
-    sms.device   = pdu.front().device;
-    sms.type     = pdu.front().type;
-    sms.sent     = sent;
-    sms.received = received;
-    sms.peer     = peer;
-    sms.subject  = subject;
-    sms.body     = body;
-
     const int sms_id = DoInsertSMS(_c->_pssms, sms);
     if (sms_id < 0) {
         mysql_rollback(_c->_conn);
@@ -584,7 +572,8 @@ bool Database::InsertArchive(
     }
 
     for (auto &&p : pdu) {
-        int ret = Delete(_c->_psdelete, p.id);
+        assert(p.id);
+        int ret = DoDelete(_c->_psdelete, p.id);
         if (ret != 1) {
             CLOG.Warn("Deleteing pdu[%d] but affected %d rows", p.id, ret);
             mysql_rollback(_c->_conn);
@@ -598,6 +587,17 @@ bool Database::InsertArchive(
                 return false;
             }
         }
+    }
+
+    for (auto &&d : duplicated) {
+        assert(d.id);
+        int ret = DoDelete(_c->_psdelete, d.id);
+        if (ret != 1) {
+            CLOG.Warn("Deleteing pdu[%d] but affected %d rows", d.id, ret);
+            mysql_rollback(_c->_conn);
+            return false;
+        }
+
     }
 
     if (mysql_commit(_c->_conn)) {

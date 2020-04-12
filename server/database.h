@@ -29,13 +29,10 @@ public:
 
     bool Select(std::list<db::PDU> *pdu);
 
-    bool InsertArchive(
+    bool InsertSMS(
+            const db::SMS &sms,
             const std::list<db::PDU> &pdu,
-            int64_t sent,
-            int64_t received,
-            const std::string &peer,
-            const std::string &subject,
-            const std::string &body);
+            const std::list<db::PDU> &duplicated);
 
 protected:
     bool Disabled() const;
