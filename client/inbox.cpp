@@ -252,6 +252,7 @@ bool Inbox::Send(
 
     m->erase(m->begin(), ps);
     c->erase(c->begin(), pc);
+    LOGT("Inbox: sent %lu messages and %lu calls", i, j);
     return true;
 }
 
