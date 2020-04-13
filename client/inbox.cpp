@@ -257,9 +257,7 @@ bool Inbox::Send(
 
 bool Inbox::Thread()
 {
-    constexpr int64_t kInitial = 5000000000LL; // 5s
-    constexpr int64_t kNext = 15000000000LL; // 15s
-    constexpr size_t kMaxTries = 3;
+    constexpr int64_t kRetry = 15000000000LL; // 15s
 
     std::list<Message> m;
     std::list<int> done;
@@ -274,43 +272,28 @@ bool Inbox::Thread()
 
         const int64_t now = get_monotonic_timestamp();
         if (schedule < 0) {
-            if (!m.empty() || !c.empty()) {
-                schedule = now + kInitial;
-                _condition.Wait(&_mutex, kInitial);
+            if (m.empty() && c.empty()) {
+                _condition.Wait(&_mutex);
                 continue;
             }
-
-            _condition.Wait(&_mutex);
-            continue;
-        }
-
-        const int64_t diff = schedule - now;
-        if (diff > 0) {
-            _condition.Wait(&_mutex, diff);
-            continue;
+        } else {
+            const int64_t diff = schedule - now;
+            if (diff > 0) {
+                _condition.Wait(&_mutex, diff);
+                continue;
+            }
         }
 
         locker.Unlock();
 
-        bool next = true;
+        schedule = -1;
         if (Send(&m, &done, &c)) {
             tries = 0;
-            if (m.empty() && c.empty()) {
-                next = false;
-            }
 
         } else {
             ++tries;
             LOGW("Inbox: sending failure, retry count: %lu", tries);
-            if (tries >= kMaxTries) {
-                next = false;
-            }
-        }
-
-        if (next) {
-            schedule = get_monotonic_timestamp() + kNext;
-        } else {
-            schedule = -1;
+            schedule = get_monotonic_timestamp() + kRetry;
         }
 
         locker.Relock();
