@@ -350,8 +350,6 @@ void Processor::Finish(
         const std::chrono::steady_clock::time_point &when,
         const db::Call &call)
 {
-    constexpr auto kWait = std::chrono::seconds(5);
-
     const int did = call.device;
     const auto p = _devices.find(did);
     if (p == _devices.end()) {
@@ -363,9 +361,9 @@ void Processor::Finish(
     device._call.push_back(call);
 
     if (device._flush == std::chrono::steady_clock::time_point::min()) {
-        device._flush = when + kWait;
+        device._flush = when;
     } else {
-        device._flush = std::min(device._flush, when + kWait);
+        device._flush = std::min(device._flush, when);
     }
 }
 
