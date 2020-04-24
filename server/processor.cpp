@@ -467,5 +467,9 @@ void Processor::Flush(bool force)
 
         const std::string &mail = Format(call, sms);
         Send(device._to, device._receiver, mail, call.size(), sms.size());
+
+        if (device._call.empty() && device._sms.empty()) {
+            device._flush = std::chrono::steady_clock::time_point::min();
+        }
     }
 }
