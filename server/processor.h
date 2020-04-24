@@ -4,9 +4,11 @@
 #include <stdint.h>
 
 #include <chrono>
+#include <condition_variable>
 #include <list>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
 
 #include "sms/server/db.h"
@@ -44,6 +46,15 @@ protected:
         std::string _to;
     }; // class Done
 
+    class Mail {
+    public:
+        std::string _to;
+        std::string _receiver;
+        std::string _mail;
+        size_t _calls;
+        size_t _sms;
+    }; // class Mail
+
     static std::string FormatTime(int64_t t);
     static std::string FormatDate(int64_t t);
     static std::string FormatDateTime(int64_t t);
@@ -54,10 +65,11 @@ protected:
             const std::list<db::Call> &call,
             const std::list<db::SMS> &sms);
 
-    static bool Send(
-            const std::string &to,
-            const std::string &receiver,
-            const std::string &mail);
+    void Send(const std::string &to,
+              const std::string &receiver,
+              const std::string &mail,
+              size_t calls,
+              size_t sms);
 
     void Split(const std::chrono::steady_clock::time_point &when);
     void InitializeDevices();
@@ -69,10 +81,19 @@ protected:
     void Finish(const std::chrono::steady_clock::time_point &when,
                 const db::Call &call);
 
+    void Mailer();
+
 private:
     // Only access from cleanup thread, no need to lock
     std::unordered_map<int, Device> _devices;
     Splitter *const _splitter;
+
+    // Access from both cleanup thread and mailer thread
+    std::condition_variable _mailCond;
+    std::list<Mail> _mails;
+    std::thread *_mailer;
+    std::mutex _mailLock;
+    bool _mailQuit;
 
     // Access from both server thread and cleanup thread
     std::list<Task> _tasks;

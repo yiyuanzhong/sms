@@ -10,6 +10,8 @@
 #include "sms/server/splitter.h"
 
 Processor::Processor() : _splitter(new Splitter)
+                       , _mailer(nullptr)
+                       , _mailQuit(false)
 {
     // Intended left blank
 }
@@ -42,6 +44,11 @@ bool Processor::Initialize()
         Split(std::chrono::steady_clock::now());
     }
 
+    std::unique_lock<std::mutex> locker(_mailLock);
+    _mailQuit = false;
+    locker.unlock();
+
+    _mailer = new std::thread([this]() { Mailer(); });
     CLOG.Trace("Processor: initializing done");
     return true;
 }
@@ -159,6 +166,18 @@ int Processor::Received(std::unique_ptr<db::Call> r)
 bool Processor::Shutdown()
 {
     Flush(true);
+
+    std::unique_lock<std::mutex> locker(_mailLock);
+    _mailCond.notify_all();
+    _mailQuit = true;
+    locker.unlock();
+
+    if (_mailer) {
+        _mailer->join();
+        delete _mailer;
+        _mailer = nullptr;
+    }
+
     return true;
 }
 
@@ -314,13 +333,56 @@ std::string Processor::Format(
     return m.str();
 }
 
-bool Processor::Send(
+void Processor::Send(
         const std::string &to,
         const std::string &receiver,
-        const std::string &mail)
+        const std::string &mail,
+        size_t calls,
+        size_t sms)
 {
-    SMTP smtp;
-    return smtp.Send(to, receiver, mail, "text/html; charset=UTF-8");
+    Mail m;
+    m._to = to;
+    m._receiver = receiver;
+    m._mail = mail;
+    m._calls = calls;
+    m._sms = sms;
+
+    std::lock_guard<std::mutex> locker(_mailLock);
+    _mailCond.notify_all();
+    _mails.push_back(m);
+}
+
+void Processor::Mailer()
+{
+    CLOG.Info("Processor: mailer started");
+    std::unique_lock<std::mutex> locker(_mailLock);
+    while (!_mailQuit) {
+        if (_mails.empty()) {
+            _mailCond.wait(locker);
+            continue;
+        }
+
+        Mail m = std::move(_mails.front());
+        _mails.pop_front();
+        locker.unlock();
+
+        CLOG.Trace("Processor: sending to %s <%s> with %lu calls and %lu SMS",
+                m._to.c_str(), m._receiver.c_str(), m._calls, m._sms);
+
+        SMTP smtp;
+        if (smtp.Send(m._to, m._receiver, m._mail, "text/html; charset=UTF-8")) {
+            CLOG.Info("Processor: sent to %s <%s> with %lu calls and %lu SMS",
+                    m._to.c_str(), m._receiver.c_str(), m._calls, m._sms);
+        } else {
+            CLOG.Warn("Processor: failed to send to %s <%s> "
+                    "with %lu calls and %lu SMS",
+                    m._to.c_str(), m._receiver.c_str(),
+                    m._calls, m._sms);
+        }
+
+        locker.lock();
+    }
+    CLOG.Info("Processor: mailer quit");
 }
 
 void Processor::Finish(
@@ -404,19 +466,6 @@ void Processor::Flush(bool force)
         }
 
         const std::string &mail = Format(call, sms);
-        CLOG.Trace("Processor: sending to %s <%s> with %lu calls and %lu SMS",
-                device._to.c_str(), device._receiver.c_str(),
-                call.size(), sms.size());
-
-        if (Send(device._to, device._receiver, mail)) {
-            CLOG.Info("Processor: sent to %s <%s> with %lu calls and %lu SMS",
-                    device._to.c_str(), device._receiver.c_str(),
-                    call.size(), sms.size());
-        } else {
-            CLOG.Warn("Processor: failed to send to %s <%s> "
-                    "with %lu calls and %lu SMS",
-                    device._to.c_str(), device._receiver.c_str(),
-                    call.size(), sms.size());
-        }
+        Send(device._to, device._receiver, mail, call.size(), sms.size());
     }
 }
