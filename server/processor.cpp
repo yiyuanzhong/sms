@@ -60,6 +60,7 @@ void Processor::InitializeDevices()
         Device d;
         d._to = c["to"];
         d._receiver = c["receiver"];
+        d._flush = std::chrono::steady_clock::time_point::min();
         const int did = c.key_as<int>();
         _devices.insert(std::make_pair(did, d));
         CLOG.Trace("Processor: device %d -> %s <%s>",
