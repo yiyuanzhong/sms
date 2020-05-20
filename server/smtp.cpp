@@ -39,7 +39,7 @@ bool SMTP::Connect(const std::string &to)
     const std::string &cainfo   = c["cainfo"];
     const std::string &from     = c["from"];
     const std::string &url      = c["url"];
-    const long kConnectTimeout  = c["connect-timeout"].as<long>(5);
+    const long kConnectTimeout  = c["connect_timeout"].as<long>(5);
     const long kTimeout         = c["timeout"].as<long>(5);
 
     curl_slist *tlist = curl_slist_append(nullptr, to.c_str());
