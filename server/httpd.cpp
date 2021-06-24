@@ -322,7 +322,7 @@ int HTTPD::Handler(
         size_t *upload_data_size,
         void **con_cls)
 {
-    static const size_t kMaximum = 8192;
+    static const size_t kMaximum = 1048576;
 
     (void)connection;
     (void)url;
