@@ -30,7 +30,7 @@ HTTPD::~HTTPD()
     // Intended left blank
 }
 
-static int httpd_handler(
+static MHD_Result httpd_handler(
         void *cls,
         struct MHD_Connection *connection,
         const char *url,
@@ -41,14 +41,14 @@ static int httpd_handler(
         void **con_cls)
 {
     HTTPD *const httpd = reinterpret_cast<HTTPD *>(cls);
-    return httpd->Handler(
+    return static_cast<MHD_Result>(httpd->Handler(
             connection,
             url,
             method,
             version,
             upload_data,
             upload_data_size,
-            con_cls);
+            con_cls));
 }
 
 static void httpd_completed(
