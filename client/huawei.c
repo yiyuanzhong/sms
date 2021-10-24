@@ -41,7 +41,7 @@ static int huawei_on_NWTIME(struct sms *sms, const struct section *s)
     }
 
     tm.tm_mon -= 1;
-    t = timelocal(&tm);
+    t = mktime(&tm);
     if (sign == '+') {
         t += tz * 900;
     } else if (sign == '-') {
