@@ -13,8 +13,13 @@ int logger_initialize(const char *filename)
     }
 
     flinter::Logger::SetColorful(false);
-    return !flinter::Logger::ProcessAttach(
-            filename, flinter::Logger::kLevelTrace);
+    return !flinter::Logger::ProcessAttach(filename,
+#ifndef NDEBUG
+            flinter::Logger::kLevelDebug
+#else
+            flinter::Logger::kLevelTrace
+#endif
+    );
 }
 
 int logger_shutdown(void)
