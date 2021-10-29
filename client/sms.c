@@ -23,7 +23,17 @@ static void HEX(const char *what, const void *buffer, size_t length)
 {
     const char H[] = "0123456789ABCDEF";
     const unsigned char *p = buffer;
+    struct timespec now;
+    struct tm tm;
     size_t i;
+
+    clock_gettime(CLOCK_REALTIME, &now);
+    localtime_r(&now.tv_sec, &tm);
+
+    printf("=== %04d-%02d-%02d %02d:%02d:%02d.%09ld ===\n",
+            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+            tm.tm_hour, tm.tm_min, tm.tm_sec,
+            now.tv_nsec);
 
     printf("%s: ", what);
     for (i = 0; i < length; ++i) {
