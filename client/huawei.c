@@ -286,8 +286,19 @@ static int huawei_on_CLIP(struct sms *sms, const struct section *s)
         return -1;
     }
 
-    if (sscanf(p, "\"%63[^\"]\",%d,,,,%d", number, &type, &validity) != 3) {
+    if (p[0] != '\"') {
         return -1;
+    }
+
+    if (p[1] == '\"') {
+        number[0] = '\0';
+        if (sscanf(p + 2, ",%d,,,,%d", &type, &validity) != 2) {
+            return -1;
+        }
+    } else {
+        if (sscanf(p, "\"%63[^\"]\",%d,,,,%d", number, &type, &validity) != 3) {
+            return -1;
+        }
     }
 
     return sms_call_set_caller(sms, number, type, validity);
