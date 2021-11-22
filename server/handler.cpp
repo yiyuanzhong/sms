@@ -151,9 +151,7 @@ bool Handler::ProcessCall(const flinter::Tree &t)
     }
 
     const std::string &peer = t["peer"];
-    if (peer.empty()) {
-        return false;
-    }
+    // peer can be empty if its identity was withheld by operator
 
     const std::string &raw = t["raw"];
 
