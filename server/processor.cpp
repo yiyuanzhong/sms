@@ -288,9 +288,15 @@ std::string Processor::Format(const db::Call &call)
 {
     std::ostringstream s;
     s << "<tr>\n"
-      << "<td>" << FormatDateTime(call.timestamp) << "</td>\n"
-      << "<td>" << flinter::EscapeHtml(call.peer) << "</td>\n"
-      << "<td>" << flinter::EscapeHtml(call.type) << "</td>\n"
+      << "<td>" << FormatDateTime(call.timestamp) << "</td>\n";
+
+    if (call.peer.empty()) {
+        s << "<td>" << flinter::EscapeHtml("<HIDDEN>") << "</td>\n";
+    } else {
+        s << "<td>" << flinter::EscapeHtml(call.peer) << "</td>\n";
+    }
+
+    s << "<td>" << flinter::EscapeHtml(call.type) << "</td>\n"
       << "<td>" << FormatDuration(call.duration)  << "</td>\n"
       << "</tr>\n";
 
